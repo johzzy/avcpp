@@ -378,11 +378,7 @@ static int opt_map(void *optctx, const char *opt, const char *arg)
     if (map[0] == '[') {
         /* this mapping refers to lavfi output */
         const char *c = map + 1;
-        // GROW_ARRAY(o->stream_maps, o->nb_stream_maps);
-        o->stream_maps = (StreamMap *)grow_array(o->stream_maps,
-                                    sizeof(*o->stream_maps),
-                                    &o->nb_stream_maps,
-                                    o->nb_stream_maps + 1);
+        GROW_ARRAY(o->stream_maps, o->nb_stream_maps);
         m = &o->stream_maps[o->nb_stream_maps - 1];
         m->linklabel = av_get_token(&c, "]");
         if (!m->linklabel) {
@@ -416,11 +412,7 @@ static int opt_map(void *optctx, const char *opt, const char *arg)
                     disabled = 1;
                     continue;
                 }
-                // GROW_ARRAY(o->stream_maps, o->nb_stream_maps);
-                o->stream_maps = (StreamMap *)grow_array(o->stream_maps,
-                                            sizeof(*o->stream_maps),
-                                            &o->nb_stream_maps,
-                                            o->nb_stream_maps + 1);
+                GROW_ARRAY(o->stream_maps, o->nb_stream_maps);
                 m = &o->stream_maps[o->nb_stream_maps - 1];
 
                 m->file_index   = file_idx;

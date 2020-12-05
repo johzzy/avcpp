@@ -666,9 +666,7 @@ static void finish_group(OptionParseContext *octx, int group_idx,
     OptionGroupList *l = &octx->groups[group_idx];
     OptionGroup *g;
 
-    // GROW_ARRAY(l->groups, l->nb_groups);
-    l->groups =
-            (OptionGroup *)grow_array(l->groups, sizeof(*l->groups), &l->nb_groups, l->nb_groups + 1);
+    GROW_ARRAY(l->groups, l->nb_groups);
     g = &l->groups[l->nb_groups - 1];
 
     *g             = octx->cur_group;
@@ -699,8 +697,7 @@ static void add_opt(OptionParseContext *octx, const OptionDef *opt,
     int global = !(opt->flags & (OPT_PERFILE | OPT_SPEC | OPT_OFFSET));
     OptionGroup *g = global ? &octx->global_opts : &octx->cur_group;
 
-    // GROW_ARRAY(g->opts, g->nb_opts);
-    g->opts = (Option *)grow_array(g->opts, sizeof(*g->opts), &g->nb_opts, g->nb_opts + 1);
+    GROW_ARRAY(g->opts, g->nb_opts);
     g->opts[g->nb_opts - 1].opt = opt;
     g->opts[g->nb_opts - 1].key = key;
     g->opts[g->nb_opts - 1].val = val;

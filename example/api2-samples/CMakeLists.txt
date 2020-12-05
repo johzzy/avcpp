@@ -78,7 +78,8 @@ set(FFTOOL_TARGETS
 set(FFTOOL_COMMON
         ../fftools/cmdutils.cpp
         )
-set(FFTOOL_FFMPEG_ONLY
+
+set(ffmpeg_Dependent
         ../fftools/ffmpeg_opt.cpp
         ../fftools/ffmpeg_filter.cpp
         ../fftools/ffmpeg_hw.cpp
@@ -86,11 +87,20 @@ set(FFTOOL_FFMPEG_ONLY
 #        ../fftools/ffmpeg_qsv.cpp
         )
 
+set(ffplay_Dependent
+        ../fftools/ffplay/common.cpp
+        ../filters/logger.cpp)
+
+set(ffplay-origin_Dependent
+        ../fftools/ffplay/common.cpp
+        ../filters/logger.cpp)
+
 file(GLOB_RECURSE FFTOOL_COMPAT CONFIGURE_DEPENDS ../fftools/*.c)
 
 foreach (target ${FFTOOL_TARGETS})
     add_executable(${target}
             ../fftools/${target}.cpp
+            ${${target}_Dependent}
             ${FFTOOL_COMMON}
             ${FFTOOL_COMPAT}
             )
@@ -116,6 +126,22 @@ foreach (target ${FFTOOL_TARGETS})
     if (WIN32)
         target_link_libraries(${target} ws2_32)
     endif ()
+
+    message(STATUS "")
 endforeach ()
 
 message(STATUS "== ${FFTOOL_COMPAT}")
+
+if (0)
+
+set(ffplay "ffplay.cc")
+set(ffplay_Dependent
+        "ffplay/common.xxx")
+
+set(item "ffplay")
+set(item "ffmpeg")
+
+message(STATUS "item ${item}")
+message(STATUS "item ${${item}_Dependent}")
+
+endif ()
