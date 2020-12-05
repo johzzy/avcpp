@@ -71,18 +71,26 @@ endforeach ()
 include_directories(../fftools)
 
 set(FFTOOL_TARGETS
-#        ffmpeg
+        ffmpeg
         ffplay
         ffprobe
         )
 set(FFTOOL_COMMON
         ../fftools/cmdutils.cpp
         )
+set(FFTOOL_FFMPEG_ONLY
+        ../fftools/ffmpeg_opt.cpp
+        ../fftools/ffmpeg_filter.cpp
+        ../fftools/ffmpeg_hw.cpp
+        ../fftools/ffmpeg_videotoolbox.cpp
+#        ../fftools/ffmpeg_qsv.cpp
+        )
 
 file(GLOB_RECURSE FFTOOL_COMPAT CONFIGURE_DEPENDS ../fftools/*.c)
 
 foreach (target ${FFTOOL_TARGETS})
-    add_executable(${target} ../fftools/${target}.cpp
+    add_executable(${target}
+            ../fftools/${target}.cpp
             ${FFTOOL_COMMON}
             ${FFTOOL_COMPAT}
             )
@@ -90,6 +98,19 @@ foreach (target ${FFTOOL_TARGETS})
             PRIVATE spdlog::spdlog_header_only
             avcpp::avcpp
             ${SDL2_LIBRARIES}
+            "-framework Security"
+            "-framework VideoToolbox"
+            "-framework CoreServices"
+            "-framework Foundation"
+            "-framework OpenCL"
+            "-framework CoreMedia"
+            "-framework AudioToolbox"
+            "-framework CoreVideo"
+            "-framework AVFoundation"
+            "-framework CoreFoundation"
+            "-framework CoreGraphics"
+            "-framework Cocoa"
+            "-framework Accelerate"
             )
 
     if (WIN32)

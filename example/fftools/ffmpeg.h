@@ -26,7 +26,7 @@
 #include <signal.h>
 
 #include "cmdutils.h"
-
+extern "C" {
 #include "libavformat/avformat.h"
 #include "libavformat/avio.h"
 
@@ -41,11 +41,11 @@
 #include "libavutil/hwcontext.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/rational.h"
-#include "libavutil/thread.h"
+// #include "libavutil/thread.h"
 #include "libavutil/threadmessage.h"
 
 #include "libswresample/swresample.h"
-
+}
 #define VSYNC_AUTO       -1
 #define VSYNC_PASSTHROUGH 0
 #define VSYNC_CFR         1

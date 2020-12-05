@@ -619,8 +619,13 @@ void *grow_array(void *array, int elem_size, int *size, int new_size);
 
 #define media_type_string av_get_media_type_string
 
-#define GROW_ARRAY(array, nb_elems)\
+#define GROW_ARRAY_BAK(array, nb_elems)\
     array = grow_array(array, sizeof(*array), &nb_elems, nb_elems + 1)
+
+template<typename ARRAY>
+void GROW_ARRAY(ARRAY*& array, int& nb_elems) {
+    array = (ARRAY*)grow_array(array, sizeof(*array), &nb_elems, nb_elems + 1);
+}
 
 #define GET_PIX_FMT_NAME(pix_fmt)\
     const char *name = av_get_pix_fmt_name(pix_fmt);

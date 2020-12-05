@@ -22,9 +22,11 @@
 #include <CoreServices/CoreServices.h>
 #endif
 
+extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavcodec/videotoolbox.h"
 #include "libavutil/imgutils.h"
+}
 #include "ffmpeg.h"
 
 typedef struct VTContext {
@@ -35,8 +37,8 @@ char *videotoolbox_pixfmt;
 
 static int videotoolbox_retrieve_data(AVCodecContext *s, AVFrame *frame)
 {
-    InputStream *ist = s->opaque;
-    VTContext  *vt = ist->hwaccel_ctx;
+    InputStream *ist = (InputStream *)s->opaque;
+    VTContext  *vt = (VTContext  *)ist->hwaccel_ctx;
     CVPixelBufferRef pixbuf = (CVPixelBufferRef)frame->data[3];
     OSType pixel_format = CVPixelBufferGetPixelFormatType(pixbuf);
     CVReturn err;
@@ -81,16 +83,16 @@ static int videotoolbox_retrieve_data(AVCodecContext *s, AVFrame *frame)
 
         planes = CVPixelBufferGetPlaneCount(pixbuf);
         for (i = 0; i < planes; i++) {
-            data[i]     = CVPixelBufferGetBaseAddressOfPlane(pixbuf, i);
+            data[i]     = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pixbuf, i);
             linesize[i] = CVPixelBufferGetBytesPerRowOfPlane(pixbuf, i);
         }
     } else {
-        data[0] = CVPixelBufferGetBaseAddress(pixbuf);
+        data[0] = (uint8_t *)CVPixelBufferGetBaseAddress(pixbuf);
         linesize[0] = CVPixelBufferGetBytesPerRow(pixbuf);
     }
 
     av_image_copy(vt->tmp_frame->data, vt->tmp_frame->linesize,
-                  (const uint8_t **)data, linesize, vt->tmp_frame->format,
+                  (const uint8_t **)data, linesize, (AVPixelFormat)vt->tmp_frame->format,
                   frame->width, frame->height);
 
     ret = av_frame_copy_props(vt->tmp_frame, frame);
@@ -106,8 +108,8 @@ static int videotoolbox_retrieve_data(AVCodecContext *s, AVFrame *frame)
 
 static void videotoolbox_uninit(AVCodecContext *s)
 {
-    InputStream *ist = s->opaque;
-    VTContext  *vt = ist->hwaccel_ctx;
+    InputStream *ist = (InputStream *)s->opaque;
+    VTContext  *vt = (VTContext  *)ist->hwaccel_ctx;
 
     ist->hwaccel_uninit        = NULL;
     ist->hwaccel_retrieve_data = NULL;
@@ -120,12 +122,12 @@ static void videotoolbox_uninit(AVCodecContext *s)
 
 int videotoolbox_init(AVCodecContext *s)
 {
-    InputStream *ist = s->opaque;
+    InputStream *ist = static_cast<InputStream *>(s->opaque);
     int loglevel = (ist->hwaccel_id == HWACCEL_AUTO) ? AV_LOG_VERBOSE : AV_LOG_ERROR;
     int ret = 0;
     VTContext *vt;
 
-    vt = av_mallocz(sizeof(*vt));
+    vt = static_cast<VTContext *>(av_mallocz(sizeof(*vt)));
     if (!vt)
         return AVERROR(ENOMEM);
 
