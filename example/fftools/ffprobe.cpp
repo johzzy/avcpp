@@ -24,10 +24,11 @@
  */
 
 #include "config.h"
-#include "libavutil/ffversion.h"
 
 #include <string.h>
-
+#include <assert.h>
+extern "C" {
+#include "libavutil/ffversion.h"
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
 #include "libavutil/avassert.h"
@@ -43,7 +44,6 @@
 #include "libavutil/stereo3d.h"
 #include "libavutil/dict.h"
 #include "libavutil/intreadwrite.h"
-#include "libavutil/libm.h"
 #include "libavutil/parseutils.h"
 #include "libavutil/timecode.h"
 #include "libavutil/timestamp.h"
@@ -51,9 +51,13 @@
 #include "libswscale/swscale.h"
 #include "libswresample/swresample.h"
 #include "libpostproc/postprocess.h"
+
+#include "libavutil_libm.h"
+#include "libavutil_thread.h"
+}
 #include "cmdutils.h"
 
-#include "libavutil/thread.h"
+
 
 #if !HAVE_THREADS
 #  ifdef pthread_mutex_lock
@@ -320,7 +324,7 @@ static void log_callback(void *ptr, int level, const char *fmt, va_list vl)
         char *msg;
         int i;
 
-        log_buffer = new_log_buffer;
+        log_buffer = (LogBuffer *)new_log_buffer;
         memset(&log_buffer[log_buffer_size], 0, sizeof(log_buffer[log_buffer_size]));
         log_buffer[log_buffer_size].context_name= avc ? av_strdup(avc->item_name(ptr)) : NULL;
         if (avc) {
@@ -450,7 +454,7 @@ typedef struct Writer {
 #define SECTION_MAX_NB_LEVELS 10
 
 struct WriterContext {
-    const AVClass *class;           ///< class of the writer
+    const AVClass *clazz;           ///< class of the writer
     const Writer *writer;           ///< the Writer of which this is an instance
     char *name;                     ///< name of this writer instance
     void *priv;                     ///< private data for use by the filter
@@ -479,7 +483,7 @@ struct WriterContext {
 
 static const char *writer_get_name(void *p)
 {
-    WriterContext *wctx = p;
+    auto wctx = (WriterContext *)p;
     return wctx->writer->name;
 }
 
@@ -500,7 +504,7 @@ static const AVOption writer_options[] = {
 
 static void *writer_child_next(void *obj, void *prev)
 {
-    WriterContext *ctx = obj;
+    auto ctx = (WriterContext *)obj;
     if (!prev && ctx->writer && ctx->writer->priv_class && ctx->priv)
         return ctx->priv;
     return NULL;
@@ -546,7 +550,7 @@ static int writer_open(WriterContext **wctx, const Writer *writer, const char *a
 {
     int i, ret = 0;
 
-    if (!(*wctx = av_mallocz(sizeof(WriterContext)))) {
+    if (!(*wctx = (WriterContext *)av_mallocz(sizeof(WriterContext)))) {
         ret = AVERROR(ENOMEM);
         goto fail;
     }
@@ -556,7 +560,7 @@ static int writer_open(WriterContext **wctx, const Writer *writer, const char *a
         goto fail;
     }
 
-    (*wctx)->class = &writer_class;
+    (*wctx)->clazz = &writer_class;
     (*wctx)->writer = writer;
     (*wctx)->level = -1;
     (*wctx)->sections = sections;
@@ -595,8 +599,8 @@ static int writer_open(WriterContext **wctx, const Writer *writer, const char *a
 
     /* validate replace string */
     {
-        const uint8_t *p = (*wctx)->string_validation_replacement;
-        const uint8_t *endp = p + strlen(p);
+        const uint8_t *p = (const uint8_t *)(*wctx)->string_validation_replacement;
+        const uint8_t *endp = p + strlen((const char *)p);
         while (*p) {
             const uint8_t *p0 = p;
             int32_t code;
@@ -688,13 +692,13 @@ static inline int validate_string(WriterContext *wctx, char **dstp, const char *
 
     av_bprint_init(&dstbuf, 0, AV_BPRINT_SIZE_UNLIMITED);
 
-    endp = src + strlen(src);
+    endp = (const uint8_t *)src + strlen(src);
     for (p = (uint8_t *)src; *p;) {
         uint32_t code;
         int invalid = 0;
         const uint8_t *p0 = p;
 
-        if (av_utf8_decode(&code, &p, endp, wctx->string_validation_utf8_flags) < 0) {
+        if (av_utf8_decode((int32_t *)&code, &p, endp, wctx->string_validation_utf8_flags) < 0) {
             AVBPrint bp;
             av_bprint_init(&bp, 0, AV_BPRINT_SIZE_AUTOMATIC);
             bprint_bytes(&bp, p0, p-p0);
@@ -721,7 +725,7 @@ static inline int validate_string(WriterContext *wctx, char **dstp, const char *
         }
 
         if (!invalid || wctx->string_validation == WRITER_STRING_VALIDATION_IGNORE)
-            av_bprint_append_data(&dstbuf, p0, p-p0);
+            av_bprint_append_data(&dstbuf, (const char *)p0, p-p0);
     }
 
     if (invalid_chars_nb && wctx->string_validation == WRITER_STRING_VALIDATION_REPLACE) {
@@ -848,7 +852,7 @@ static void writer_print_data_hash(WriterContext *wctx, const char *name,
     av_hash_update(hash, data, size);
     snprintf(buf, sizeof(buf), "%s:", av_hash_get_name(hash));
     p = buf + strlen(buf);
-    av_hash_final_hex(hash, p, buf + sizeof(buf) - p);
+    av_hash_final_hex(hash, (uint8_t *)p, buf + sizeof(buf) - p);
     writer_print_string(wctx, name, buf, 0);
 }
 
@@ -921,7 +925,7 @@ static const AVClass name##_class = {               \
 /* Default output */
 
 typedef struct DefaultContext {
-    const AVClass *class;
+    const AVClass *clazz;
     int nokey;
     int noprint_wrappers;
     int nested_section[SECTION_MAX_NB_LEVELS];
@@ -952,7 +956,7 @@ static inline char *upcase_string(char *dst, size_t dst_size, const char *src)
 
 static void default_print_section_header(WriterContext *wctx)
 {
-    DefaultContext *def = wctx->priv;
+    auto def = (DefaultContext *)wctx->priv;
     char buf[32];
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
@@ -965,7 +969,7 @@ static void default_print_section_header(WriterContext *wctx)
         av_bprintf(&wctx->section_pbuf[wctx->level], "%s%s:",
                    wctx->section_pbuf[wctx->level-1].str,
                    upcase_string(buf, sizeof(buf),
-                                 av_x_if_null(section->element_name, section->name)));
+                                 (char*)av_x_if_null(section->element_name, section->name)));
     }
 
     if (def->noprint_wrappers || def->nested_section[wctx->level])
@@ -977,7 +981,7 @@ static void default_print_section_header(WriterContext *wctx)
 
 static void default_print_section_footer(WriterContext *wctx)
 {
-    DefaultContext *def = wctx->priv;
+    auto def = (DefaultContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
     char buf[32];
 
@@ -990,7 +994,7 @@ static void default_print_section_footer(WriterContext *wctx)
 
 static void default_print_str(WriterContext *wctx, const char *key, const char *value)
 {
-    DefaultContext *def = wctx->priv;
+    auto def = (DefaultContext *)wctx->priv;
 
     if (!def->nokey)
         printf("%s%s=", wctx->section_pbuf[wctx->level].str, key);
@@ -999,7 +1003,7 @@ static void default_print_str(WriterContext *wctx, const char *key, const char *
 
 static void default_print_int(WriterContext *wctx, const char *key, long long int value)
 {
-    DefaultContext *def = wctx->priv;
+    auto def = (DefaultContext *)wctx->priv;
 
     if (!def->nokey)
         printf("%s%s=", wctx->section_pbuf[wctx->level].str, key);
@@ -1069,7 +1073,7 @@ static const char *none_escape_str(AVBPrint *dst, const char *src, const char se
 }
 
 typedef struct CompactContext {
-    const AVClass *class;
+    const AVClass *clazz;
     char *item_sep_str;
     char item_sep;
     int nokey;
@@ -1100,7 +1104,7 @@ DEFINE_WRITER_CLASS(compact);
 
 static av_cold int compact_init(WriterContext *wctx)
 {
-    CompactContext *compact = wctx->priv;
+    auto compact = (CompactContext *)wctx->priv;
 
     if (strlen(compact->item_sep_str) != 1) {
         av_log(wctx, AV_LOG_ERROR, "Item separator '%s' specified, but must contain a single character\n",
@@ -1122,7 +1126,7 @@ static av_cold int compact_init(WriterContext *wctx)
 
 static void compact_print_section_header(WriterContext *wctx)
 {
-    CompactContext *compact = wctx->priv;
+    auto compact = (CompactContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
         wctx->section[wctx->level-1] : NULL;
@@ -1152,7 +1156,7 @@ static void compact_print_section_header(WriterContext *wctx)
 
 static void compact_print_section_footer(WriterContext *wctx)
 {
-    CompactContext *compact = wctx->priv;
+    auto compact = (CompactContext *)wctx->priv;
 
     if (!compact->nested_section[wctx->level] &&
         compact->terminate_line[wctx->level] &&
@@ -1162,7 +1166,7 @@ static void compact_print_section_footer(WriterContext *wctx)
 
 static void compact_print_str(WriterContext *wctx, const char *key, const char *value)
 {
-    CompactContext *compact = wctx->priv;
+    auto compact = (CompactContext *)wctx->priv;
     AVBPrint buf;
 
     if (wctx->nb_item[wctx->level]) printf("%c", compact->item_sep);
@@ -1175,7 +1179,7 @@ static void compact_print_str(WriterContext *wctx, const char *key, const char *
 
 static void compact_print_int(WriterContext *wctx, const char *key, long long int value)
 {
-    CompactContext *compact = wctx->priv;
+    auto compact = (CompactContext *)wctx->priv;
 
     if (wctx->nb_item[wctx->level]) printf("%c", compact->item_sep);
     if (!compact->nokey)
@@ -1229,7 +1233,7 @@ static const Writer csv_writer = {
 /* Flat output */
 
 typedef struct FlatContext {
-    const AVClass *class;
+    const AVClass *clazz;
     const char *sep_str;
     char sep;
     int hierarchical;
@@ -1250,7 +1254,7 @@ DEFINE_WRITER_CLASS(flat);
 
 static av_cold int flat_init(WriterContext *wctx)
 {
-    FlatContext *flat = wctx->priv;
+    auto flat = (FlatContext *)wctx->priv;
 
     if (strlen(flat->sep_str) != 1) {
         av_log(wctx, AV_LOG_ERROR, "Item separator '%s' specified, but must contain a single character\n",
@@ -1297,7 +1301,7 @@ static const char *flat_escape_value_str(AVBPrint *dst, const char *src)
 
 static void flat_print_section_header(WriterContext *wctx)
 {
-    FlatContext *flat = wctx->priv;
+    auto flat = (FlatContext *)wctx->priv;
     AVBPrint *buf = &wctx->section_pbuf[wctx->level];
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
@@ -1328,7 +1332,7 @@ static void flat_print_int(WriterContext *wctx, const char *key, long long int v
 
 static void flat_print_str(WriterContext *wctx, const char *key, const char *value)
 {
-    FlatContext *flat = wctx->priv;
+    auto flat = (FlatContext *)wctx->priv;
     AVBPrint buf;
 
     printf("%s", wctx->section_pbuf[wctx->level].str);
@@ -1353,7 +1357,7 @@ static const Writer flat_writer = {
 /* INI format output */
 
 typedef struct INIContext {
-    const AVClass *class;
+    const AVClass *clazz;
     int hierarchical;
 } INIContext;
 
@@ -1397,7 +1401,7 @@ static char *ini_escape_str(AVBPrint *dst, const char *src)
 
 static void ini_print_section_header(WriterContext *wctx)
 {
-    INIContext *ini = wctx->priv;
+    auto ini = (INIContext *)wctx->priv;
     AVBPrint *buf = &wctx->section_pbuf[wctx->level];
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
@@ -1457,7 +1461,7 @@ static const Writer ini_writer = {
 /* JSON output */
 
 typedef struct JSONContext {
-    const AVClass *class;
+    const AVClass *clazz;
     int indent_level;
     int compact;
     const char *item_sep, *item_start_end;
@@ -1476,7 +1480,7 @@ DEFINE_WRITER_CLASS(json);
 
 static av_cold int json_init(WriterContext *wctx)
 {
-    JSONContext *json = wctx->priv;
+    auto json = (JSONContext *)wctx->priv;
 
     json->item_sep       = json->compact ? ", " : ",\n";
     json->item_start_end = json->compact ? " "  : "\n";
@@ -1491,7 +1495,7 @@ static const char *json_escape_str(AVBPrint *dst, const char *src, void *log_ctx
     const char *p;
 
     for (p = src; *p; p++) {
-        char *s = strchr(json_escape, *p);
+        char *s = (char *)strchr(json_escape, *p);
         if (s) {
             av_bprint_chars(dst, '\\', 1);
             av_bprint_chars(dst, json_subst[s - json_escape], 1);
@@ -1508,7 +1512,7 @@ static const char *json_escape_str(AVBPrint *dst, const char *src, void *log_ctx
 
 static void json_print_section_header(WriterContext *wctx)
 {
-    JSONContext *json = wctx->priv;
+    JSONContext *json = (JSONContext *)wctx->priv;
     AVBPrint buf;
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
@@ -1546,7 +1550,7 @@ static void json_print_section_header(WriterContext *wctx)
 
 static void json_print_section_footer(WriterContext *wctx)
 {
-    JSONContext *json = wctx->priv;
+    JSONContext *json = (JSONContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
 
     if (wctx->level == 0) {
@@ -1580,7 +1584,7 @@ static inline void json_print_item_str(WriterContext *wctx,
 
 static void json_print_str(WriterContext *wctx, const char *key, const char *value)
 {
-    JSONContext *json = wctx->priv;
+    JSONContext *json = (JSONContext *)wctx->priv;
     const struct section *parent_section = wctx->level ?
         wctx->section[wctx->level-1] : NULL;
 
@@ -1593,7 +1597,7 @@ static void json_print_str(WriterContext *wctx, const char *key, const char *val
 
 static void json_print_int(WriterContext *wctx, const char *key, long long int value)
 {
-    JSONContext *json = wctx->priv;
+    JSONContext *json = (JSONContext *)wctx->priv;
     const struct section *parent_section = wctx->level ?
         wctx->section[wctx->level-1] : NULL;
     AVBPrint buf;
@@ -1623,7 +1627,7 @@ static const Writer json_writer = {
 /* XML output */
 
 typedef struct XMLContext {
-    const AVClass *class;
+    const AVClass *clazz;
     int within_tag;
     int indent_level;
     int fully_qualified;
@@ -1645,7 +1649,7 @@ DEFINE_WRITER_CLASS(xml);
 
 static av_cold int xml_init(WriterContext *wctx)
 {
-    XMLContext *xml = wctx->priv;
+    XMLContext *xml = (XMLContext *)wctx->priv;
 
     if (xml->xsd_strict) {
         xml->fully_qualified = 1;
@@ -1693,7 +1697,7 @@ static const char *xml_escape_str(AVBPrint *dst, const char *src, void *log_ctx)
 
 static void xml_print_section_header(WriterContext *wctx)
 {
-    XMLContext *xml = wctx->priv;
+    XMLContext *xml = (XMLContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
     const struct section *parent_section = wctx->level ?
         wctx->section[wctx->level-1] : NULL;
@@ -1733,7 +1737,7 @@ static void xml_print_section_header(WriterContext *wctx)
 
 static void xml_print_section_footer(WriterContext *wctx)
 {
-    XMLContext *xml = wctx->priv;
+    XMLContext *xml = (XMLContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
 
     if (wctx->level == 0) {
@@ -1753,7 +1757,7 @@ static void xml_print_section_footer(WriterContext *wctx)
 static void xml_print_str(WriterContext *wctx, const char *key, const char *value)
 {
     AVBPrint buf;
-    XMLContext *xml = wctx->priv;
+    XMLContext *xml = (XMLContext *)wctx->priv;
     const struct section *section = wctx->section[wctx->level];
 
     av_bprint_init(&buf, 1, AV_BPRINT_SIZE_UNLIMITED);
@@ -1837,8 +1841,7 @@ static void writer_register_all(void)
 #define REALLOCZ_ARRAY_STREAM(ptr, cur_n, new_n)                        \
 {                                                                       \
     ret = av_reallocp_array(&(ptr), (new_n), sizeof(*(ptr)));           \
-    if (ret < 0)                                                        \
-        goto end;                                                       \
+    assert (ret >= 0);                                                        \
     memset( (ptr) + (cur_n), 0, ((new_n) - (cur_n)) * sizeof(*(ptr)) ); \
 }
 
@@ -2071,7 +2074,7 @@ static void show_packet(WriterContext *w, InputFile *ifile, AVPacket *pkt, int p
     print_duration_ts("convergence_duration", pkt->convergence_duration);
     print_duration_time("convergence_duration_time", pkt->convergence_duration, &st->time_base);
     print_val("size",             pkt->size, unit_byte_str);
-    if (pkt->pos != -1) print_fmt    ("pos", "%"PRId64, pkt->pos);
+    if (pkt->pos != -1) print_fmt    ("pos", "%" PRId64, pkt->pos);
     else                print_str_opt("pos", "N/A");
     print_fmt("flags", "%c%c",      pkt->flags & AV_PKT_FLAG_KEY ? 'K' : '_',
               pkt->flags & AV_PKT_FLAG_DISCARD ? 'D' : '_');
@@ -2102,6 +2105,8 @@ static void show_packet(WriterContext *w, InputFile *ifile, AVPacket *pkt, int p
     fflush(stdout);
 }
 
+static const auto kAvTimeBase = AV_TIME_BASE_Q;
+
 static void show_subtitle(WriterContext *w, AVSubtitle *sub, AVStream *stream,
                           AVFormatContext *fmt_ctx)
 {
@@ -2113,7 +2118,7 @@ static void show_subtitle(WriterContext *w, AVSubtitle *sub, AVStream *stream,
 
     print_str ("media_type",         "subtitle");
     print_ts  ("pts",                 sub->pts);
-    print_time("pts_time",            sub->pts, &AV_TIME_BASE_Q);
+    print_time("pts_time",            sub->pts, &kAvTimeBase);
     print_int ("format",              sub->format);
     print_int ("start_display_time",  sub->start_display_time);
     print_int ("end_display_time",    sub->end_display_time);
@@ -2123,6 +2128,39 @@ static void show_subtitle(WriterContext *w, AVSubtitle *sub, AVStream *stream,
 
     av_bprint_finalize(&pbuf, NULL);
     fflush(stdout);
+}
+
+static unsigned bcd2uint(uint8_t bcd)
+{
+    unsigned low  = bcd & 0xf;
+    unsigned high = bcd >> 4;
+    if (low > 9 || high > 9)
+        return 0;
+    return low + 10*high;
+}
+
+static char *av_timecode_make_smpte_tc_string2(char *buf, AVRational rate, uint32_t tcsmpte, int prevent_df, int skip_field)
+{
+    unsigned hh   = bcd2uint(tcsmpte     & 0x3f);    // 6-bit hours
+    unsigned mm   = bcd2uint(tcsmpte>>8  & 0x7f);    // 7-bit minutes
+    unsigned ss   = bcd2uint(tcsmpte>>16 & 0x7f);    // 7-bit seconds
+    unsigned ff   = bcd2uint(tcsmpte>>24 & 0x3f);    // 6-bit frames
+    unsigned drop = tcsmpte & 1<<30 && !prevent_df;  // 1-bit drop if not arbitrary bit
+
+    if (av_cmp_q(rate, (AVRational) {30, 1}) == 1) {
+        ff <<= 1;
+        if (!skip_field) {
+            if (av_cmp_q(rate, (AVRational) {50, 1}) == 0)
+                ff += !!(tcsmpte & 1 << 7);
+            else
+                ff += !!(tcsmpte & 1 << 23);
+        }
+    }
+
+    snprintf(buf, AV_TIMECODE_STR_SIZE, "%02u:%02u:%02u%c%02u",
+             hh, mm, ss, drop ? ';' : ':', ff);
+    return buf;
+
 }
 
 static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
@@ -2150,7 +2188,7 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
     print_time("best_effort_timestamp_time", frame->best_effort_timestamp, &stream->time_base);
     print_duration_ts  ("pkt_duration",      frame->pkt_duration);
     print_duration_time("pkt_duration_time", frame->pkt_duration, &stream->time_base);
-    if (frame->pkt_pos != -1) print_fmt    ("pkt_pos", "%"PRId64, frame->pkt_pos);
+    if (frame->pkt_pos != -1) print_fmt    ("pkt_pos", "%" PRId64, frame->pkt_pos);
     else                      print_str_opt("pkt_pos", "N/A");
     if (frame->pkt_size != -1) print_val    ("pkt_size", frame->pkt_size, unit_byte_str);
     else                       print_str_opt("pkt_size", "N/A");
@@ -2161,7 +2199,7 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
     case AVMEDIA_TYPE_VIDEO:
         print_int("width",                  frame->width);
         print_int("height",                 frame->height);
-        s = av_get_pix_fmt_name(frame->format);
+        s = av_get_pix_fmt_name((AVPixelFormat)frame->format);
         if (s) print_str    ("pix_fmt", s);
         else   print_str_opt("pix_fmt", "unknown");
         sar = av_guess_sample_aspect_ratio(fmt_ctx, stream, frame);
@@ -2185,7 +2223,7 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
         break;
 
     case AVMEDIA_TYPE_AUDIO:
-        s = av_get_sample_fmt_name(frame->format);
+        s = av_get_sample_fmt_name((AVSampleFormat)frame->format);
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_int("nb_samples",         frame->nb_samples);
@@ -2340,7 +2378,7 @@ static void log_read_interval(const ReadInterval *interval, void *log_ctx, int l
 
     if (interval->has_start) {
         av_log(log_ctx, log_level, " start:%s%s", interval->start_is_offset ? "+" : "",
-               av_ts2timestr(interval->start, &AV_TIME_BASE_Q));
+               av_ts2timestr(interval->start, (AVRational*)&kAvTimeBase));
     } else {
         av_log(log_ctx, log_level, " start:N/A");
     }
@@ -2348,9 +2386,9 @@ static void log_read_interval(const ReadInterval *interval, void *log_ctx, int l
     if (interval->has_end) {
         av_log(log_ctx, log_level, " end:%s", interval->end_is_offset ? "+" : "");
         if (interval->duration_frames)
-            av_log(log_ctx, log_level, "#%"PRId64, interval->end);
+            av_log(log_ctx, log_level, "#%" PRId64, interval->end);
         else
-            av_log(log_ctx, log_level, "%s", av_ts2timestr(interval->end, &AV_TIME_BASE_Q));
+            av_log(log_ctx, log_level, "%s", av_ts2timestr(interval->end, (AVRational*)&kAvTimeBase));
     } else {
         av_log(log_ctx, log_level, " end:N/A");
     }
@@ -2367,7 +2405,7 @@ static int read_interval_packets(WriterContext *w, InputFile *ifile,
     int ret = 0, i = 0, frame_count = 0;
     int64_t start = -INT64_MAX, end = interval->end;
     int has_start = 0, has_end = interval->has_end && !interval->end_is_offset;
-
+    int packet_new = 1;
     av_init_packet(&pkt);
 
     av_log(NULL, AV_LOG_VERBOSE, "Processing read interval ");
@@ -2389,9 +2427,9 @@ static int read_interval_packets(WriterContext *w, InputFile *ifile,
         }
 
         av_log(NULL, AV_LOG_VERBOSE, "Seeking to read interval start point %s\n",
-               av_ts2timestr(target, &AV_TIME_BASE_Q));
+               av_ts2timestr(target, (AVRational*)&kAvTimeBase));
         if ((ret = avformat_seek_file(fmt_ctx, -1, -INT64_MAX, target, INT64_MAX, 0)) < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Could not seek to position %"PRId64": %s\n",
+            av_log(NULL, AV_LOG_ERROR, "Could not seek to position %" PRId64": %s\n",
                    interval->start, av_err2str(ret));
             goto end;
         }
@@ -2439,7 +2477,6 @@ static int read_interval_packets(WriterContext *w, InputFile *ifile,
                 nb_streams_packets[pkt.stream_index]++;
             }
             if (do_read_frames) {
-                int packet_new = 1;
                 while (process_frame(w, ifile, frame, &pkt, &packet_new) > 0);
             }
         }
@@ -2447,10 +2484,11 @@ static int read_interval_packets(WriterContext *w, InputFile *ifile,
     }
     av_packet_unref(&pkt);
     //Flush remaining frames that are cached in the decoder
+    packet_new = 1;
     for (i = 0; i < fmt_ctx->nb_streams; i++) {
         pkt.stream_index = i;
         if (do_read_frames)
-            while (process_frame(w, ifile, frame, &pkt, &(int){1}) > 0);
+            while (process_frame(w, ifile, frame, &pkt, &packet_new) > 0);
     }
 
 end:
@@ -2537,7 +2575,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
 
     /* print AVI/FourCC tag */
     print_str("codec_tag_string",    av_fourcc2str(par->codec_tag));
-    print_fmt("codec_tag", "0x%04"PRIx32, par->codec_tag);
+    print_fmt("codec_tag", "0x%04" PRIx32, par->codec_tag);
 
     switch (par->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
@@ -2563,7 +2601,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
             print_str_opt("sample_aspect_ratio", "N/A");
             print_str_opt("display_aspect_ratio", "N/A");
         }
-        s = av_get_pix_fmt_name(par->format);
+        s = av_get_pix_fmt_name((AVPixelFormat)par->format);
         if (s) print_str    ("pix_fmt", s);
         else   print_str_opt("pix_fmt", "unknown");
         print_int("level",   par->level);
@@ -2601,7 +2639,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         break;
 
     case AVMEDIA_TYPE_AUDIO:
-        s = av_get_sample_fmt_name(par->format);
+        s = av_get_sample_fmt_name((AVSampleFormat)par->format);
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_val("sample_rate",     par->sample_rate, unit_hertz_str);
@@ -2636,7 +2674,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
             uint8_t *str;
             if (opt->flags) continue;
             if (av_opt_get(dec_ctx->priv_data, opt->name, 0, &str) >= 0) {
-                print_str(opt->name, str);
+                print_str(opt->name, (char*)str);
                 av_free(str);
             }
         }
@@ -2659,11 +2697,11 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
 #endif
     if (dec_ctx && dec_ctx->bits_per_raw_sample > 0) print_fmt("bits_per_raw_sample", "%d", dec_ctx->bits_per_raw_sample);
     else                                             print_str_opt("bits_per_raw_sample", "N/A");
-    if (stream->nb_frames) print_fmt    ("nb_frames", "%"PRId64, stream->nb_frames);
+    if (stream->nb_frames) print_fmt    ("nb_frames", "%" PRId64, stream->nb_frames);
     else                   print_str_opt("nb_frames", "N/A");
-    if (nb_streams_frames[stream_idx])  print_fmt    ("nb_read_frames", "%"PRIu64, nb_streams_frames[stream_idx]);
+    if (nb_streams_frames[stream_idx])  print_fmt    ("nb_read_frames", "%" PRIu64, nb_streams_frames[stream_idx]);
     else                                print_str_opt("nb_read_frames", "N/A");
-    if (nb_streams_packets[stream_idx]) print_fmt    ("nb_read_packets", "%"PRIu64, nb_streams_packets[stream_idx]);
+    if (nb_streams_packets[stream_idx]) print_fmt    ("nb_read_packets", "%" PRIu64, nb_streams_packets[stream_idx]);
     else                                print_str_opt("nb_read_packets", "N/A");
     if (do_show_data)
         writer_print_data(w, "extradata", par->extradata,
@@ -2738,9 +2776,9 @@ static int show_program(WriterContext *w, InputFile *ifile, AVProgram *program)
     print_int("pmt_pid", program->pmt_pid);
     print_int("pcr_pid", program->pcr_pid);
     print_ts("start_pts", program->start_time);
-    print_time("start_time", program->start_time, &AV_TIME_BASE_Q);
+    print_time("start_time", program->start_time, (AVRational*)&kAvTimeBase);
     print_ts("end_pts", program->end_time);
-    print_time("end_time", program->end_time, &AV_TIME_BASE_Q);
+    print_time("end_time", program->end_time, (AVRational*)&kAvTimeBase);
     if (do_show_program_tags)
         ret = show_tags(w, program->metadata, SECTION_ID_PROGRAM_TAGS);
     if (ret < 0)
@@ -2820,8 +2858,8 @@ static int show_format(WriterContext *w, InputFile *ifile)
         if (fmt_ctx->iformat->long_name) print_str    ("format_long_name", fmt_ctx->iformat->long_name);
         else                             print_str_opt("format_long_name", "unknown");
     }
-    print_time("start_time",      fmt_ctx->start_time, &AV_TIME_BASE_Q);
-    print_time("duration",        fmt_ctx->duration,   &AV_TIME_BASE_Q);
+    print_time("start_time",      fmt_ctx->start_time, (AVRational*)&kAvTimeBase);
+    print_time("duration",        fmt_ctx->duration,   (AVRational*)&kAvTimeBase);
     if (size >= 0) print_val    ("size", size, unit_byte_str);
     else           print_str_opt("size", "N/A");
     if (fmt_ctx->bit_rate > 0) print_val    ("bit_rate", fmt_ctx->bit_rate, unit_bit_per_second_str);
@@ -2900,7 +2938,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
 
     av_dump_format(fmt_ctx, 0, filename, 0);
 
-    ifile->streams = av_mallocz_array(fmt_ctx->nb_streams,
+    ifile->streams = (InputStream *)av_mallocz_array(fmt_ctx->nb_streams,
                                       sizeof(*ifile->streams));
     if (!ifile->streams)
         exit(1);
@@ -3107,6 +3145,12 @@ static void ffprobe_show_program_version(WriterContext *w)
         }                                                               \
     } while (0)
 
+unsigned avfilter_version(void)
+{
+    av_assert0(LIBAVFILTER_VERSION_MICRO >= 100);
+    return LIBAVFILTER_VERSION_INT;
+}
+
 static void ffprobe_show_library_versions(WriterContext *w)
 {
     writer_print_section_header(w, SECTION_ID_LIBRARY_VERSIONS);
@@ -3193,7 +3237,7 @@ static inline void mark_section_show_entries(SectionID section_id,
     section->show_all_entries = show_all_entries;
     if (show_all_entries) {
         SectionID *id;
-        for (id = section->children_ids; *id != -1; id++)
+        for (id = (SectionID*)section->children_ids; *id != -1; id++)
             mark_section_show_entries(*id, show_all_entries, entries);
     } else {
         av_dict_copy(&section->entries_to_show, entries, 0);
@@ -3213,7 +3257,7 @@ static int match_section(const char *section_name,
                    "'%s' matches section with unique name '%s'\n", section_name,
                    (char *)av_x_if_null(section->unique_name, section->name));
             ret++;
-            mark_section_show_entries(section->id, show_all_entries, entries);
+            mark_section_show_entries((SectionID)section->id, show_all_entries, entries);
         }
     }
     return ret;
@@ -3421,7 +3465,7 @@ static int parse_read_intervals(const char *intervals_spec)
             n++;
     n++;
 
-    read_intervals = av_malloc_array(n, sizeof(*read_intervals));
+    read_intervals = (ReadInterval *)av_malloc_array(n, sizeof(*read_intervals));
     if (!read_intervals) {
         ret = AVERROR(ENOMEM);
         goto end;
@@ -3483,7 +3527,7 @@ static void print_section(SectionID id, int level)
         printf("/%s", section->unique_name);
     printf("\n");
 
-    for (pid = section->children_ids; *pid != -1; pid++)
+    for (pid = (const SectionID *)section->children_ids; *pid != -1; pid++)
         print_section(*pid, level+1);
 }
 

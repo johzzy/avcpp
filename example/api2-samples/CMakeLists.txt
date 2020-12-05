@@ -73,7 +73,7 @@ include_directories(../fftools)
 set(FFTOOL_TARGETS
 #        ffmpeg
         ffplay
-#        ffprobe
+        ffprobe
         )
 set(FFTOOL_COMMON
         ../fftools/cmdutils.cpp
