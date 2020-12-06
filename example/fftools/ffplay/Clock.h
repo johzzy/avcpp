@@ -4,6 +4,12 @@
 
 #pragma once
 
+#include <cmath>
+#include <cstring>
+extern "C" {
+#include <libavutil/time.h>
+}
+
 /* no AV correction is done if too big error */
 constexpr double AV_NOSYNC_THRESHOLD = 10.0;
 

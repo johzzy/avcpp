@@ -4,6 +4,13 @@
 
 #pragma once
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
+#include <SDL2/SDL_mutex.h>
+
+
 /* Common struct for handling all types of decoded data and allocated render buffers. */
 struct Frame {
     AVFrame *frame;

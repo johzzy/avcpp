@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <cassert>
+#include <SDL2/SDL_thread.h>
 
 struct Decoder {
     AVPacket pkt;

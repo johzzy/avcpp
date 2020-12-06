@@ -89,20 +89,18 @@ set(ffmpeg_Dependent
 
 set(ffplay_Dependent
         ../fftools/ffplay/common.cpp
-        ../filters/logger.cpp)
-
-set(ffplay-origin_Dependent
-        ../fftools/ffplay/common.cpp
+        ../fftools/ffplay/VideoState.cpp
         ../filters/logger.cpp)
 
 file(GLOB_RECURSE FFTOOL_COMPAT CONFIGURE_DEPENDS ../fftools/*.c)
 
 foreach (target ${FFTOOL_TARGETS})
     add_executable(${target}
-            ../fftools/${target}.cpp
             ${${target}_Dependent}
+            ../fftools/${target}.cpp
             ${FFTOOL_COMMON}
             ${FFTOOL_COMPAT}
+            ${LIBSTDCXX}
             )
     target_link_libraries(${target}
             PRIVATE spdlog::spdlog_header_only
@@ -127,10 +125,10 @@ foreach (target ${FFTOOL_TARGETS})
         target_link_libraries(${target} ws2_32)
     endif ()
 
-    message(STATUS "")
+    message(STATUS "${target}: ${${target}_Dependent}")
 endforeach ()
 
-message(STATUS "== ${FFTOOL_COMPAT}")
+message(STATUS "compat: ${FFTOOL_COMPAT}")
 
 if (0)
 
