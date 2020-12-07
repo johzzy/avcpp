@@ -4,7 +4,6 @@
 
 #pragma once
 
-
 #include "Clock.h"
 #include "FrameQueue.h"
 #include "Decoder.h"
@@ -26,54 +25,54 @@ extern "C" {
 #include <cstdint>
 #include <cmath>
 
-
 /* NOTE: the size must be big enough to compensate the hardware audio buffersize
  * size */
 /* TODO: We assume that a decoded and resampled frame fits into this buffer */
-constexpr int SAMPLE_ARRAY_SIZE =  (8 * 65536);
+constexpr int SAMPLE_ARRAY_SIZE = (8 * 65536);
 
 /* we use about AUDIO_DIFF_AVG_NB A-V differences to make the average */
-constexpr int AUDIO_DIFF_AVG_NB =  20;
+constexpr int AUDIO_DIFF_AVG_NB = 20;
 
 /* Minimum SDL audio buffer size, in samples. */
 constexpr int SDL_AUDIO_MIN_BUFFER_SIZE = 512;
 
-/* Calculate actual buffer size keeping in mind not cause too frequent audio callbacks */
+/* Calculate actual buffer size keeping in mind not cause too frequent audio
+ * callbacks */
 constexpr int SDL_AUDIO_MAX_CALLBACKS_PER_SEC = 30;
 
-
-/* polls for possible required screen refresh at least this often, should be less than 1/fps */
+/* polls for possible required screen refresh at least this often, should be
+ * less than 1/fps */
 constexpr auto REFRESH_RATE = 0.01;
-
 
 constexpr auto CURSOR_HIDE_DELAY = 1000000;
 
-constexpr auto FF_QUIT_EVENT   = (SDL_USEREVENT + 2);
+constexpr auto FF_QUIT_EVENT = (SDL_USEREVENT + 2);
 
 /* Step size for volume control in dB */
 constexpr auto SDL_VOLUME_STEP = (0.75);
 
-
 constexpr auto EXTERNAL_CLOCK_MIN_FRAMES = 2;
 constexpr auto EXTERNAL_CLOCK_MAX_FRAMES = 10;
 
-
-/* external clock speed adjustment constants for realtime sources based on buffer fullness */
-constexpr auto  EXTERNAL_CLOCK_SPEED_MIN = 0.900;
-constexpr auto  EXTERNAL_CLOCK_SPEED_MAX = 1.010;
-constexpr auto  EXTERNAL_CLOCK_SPEED_STEP= 0.001;
+/* external clock speed adjustment constants for realtime sources based on
+ * buffer fullness */
+constexpr auto EXTERNAL_CLOCK_SPEED_MIN = 0.900;
+constexpr auto EXTERNAL_CLOCK_SPEED_MAX = 1.010;
+constexpr auto EXTERNAL_CLOCK_SPEED_STEP = 0.001;
 
 /* no AV sync correction is done if below the minimum AV sync threshold */
-constexpr auto  AV_SYNC_THRESHOLD_MIN= 0.04;
+constexpr auto AV_SYNC_THRESHOLD_MIN = 0.04;
 /* AV sync correction is done if above the maximum AV sync threshold */
-constexpr auto  AV_SYNC_THRESHOLD_MAX =0.1;
-/* If a frame duration is longer than this, it will not be duplicated to compensate AV sync */
-constexpr auto  AV_SYNC_FRAMEDUP_THRESHOLD= 0.1;
+constexpr auto AV_SYNC_THRESHOLD_MAX = 0.1;
+/* If a frame duration is longer than this, it will not be duplicated to
+ * compensate AV sync */
+constexpr auto AV_SYNC_FRAMEDUP_THRESHOLD = 0.1;
 
 /* maximum audio speed change to get correct sync */
-constexpr auto SAMPLE_CORRECTION_PERCENT_MAX =10;
+constexpr auto SAMPLE_CORRECTION_PERCENT_MAX = 10;
 
-
+constexpr auto MAX_QUEUE_SIZE = (15 * 1024 * 1024);
+constexpr auto MIN_FRAMES = 25;
 
 enum {
     AV_SYNC_AUDIO_MASTER, /* default choice */
@@ -93,7 +92,12 @@ struct AudioParams {
 struct SDL_Renderer;
 struct SDL_Texture;
 
-int realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
+int realloc_texture(SDL_Texture **texture,
+                    Uint32 new_format,
+                    int new_width,
+                    int new_height,
+                    SDL_BlendMode blendmode,
+                    int init_texture);
 
 struct VideoState {
     SDL_Thread *read_tid;
@@ -154,8 +158,14 @@ struct VideoState {
     int frame_drops_late;
 
     enum ShowMode {
-        SHOW_MODE_NONE = -1, SHOW_MODE_VIDEO = 0, SHOW_MODE_WAVES, SHOW_MODE_RDFT, SHOW_MODE_NB
-    } show_mode;
+        SHOW_MODE_NONE = -1,
+        SHOW_MODE_VIDEO = 0,
+        SHOW_MODE_WAVES,
+        SHOW_MODE_RDFT,
+        SHOW_MODE_NB
+    };
+    ShowMode show_mode;
+    static ShowMode show_mode_;
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
     int last_i_start;
@@ -178,7 +188,8 @@ struct VideoState {
     int video_stream;
     AVStream *video_st;
     PacketQueue videoq;
-    double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+    double max_frame_duration; // maximum duration of a frame - above this, we
+                               // consider the jump a timestamp discontinuity
     struct SwsContext *img_convert_ctx;
     struct SwsContext *sub_convert_ctx;
     int eof;
@@ -188,11 +199,11 @@ struct VideoState {
     int step;
 
     int vfilter_idx;
-    AVFilterContext *in_video_filter;   // the first filter in the video chain
-    AVFilterContext *out_video_filter;  // the last filter in the video chain
-    AVFilterContext *in_audio_filter;   // the first filter in the audio chain
-    AVFilterContext *out_audio_filter;  // the last filter in the audio chain
-    AVFilterGraph *agraph;              // audio filter graph
+    AVFilterContext *in_video_filter;  // the first filter in the video chain
+    AVFilterContext *out_video_filter; // the last filter in the video chain
+    AVFilterContext *in_audio_filter;  // the first filter in the audio chain
+    AVFilterContext *out_audio_filter; // the last filter in the audio chain
+    AVFilterGraph *agraph;             // audio filter graph
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
@@ -202,24 +213,45 @@ struct VideoState {
     static SDL_RendererInfo renderer_info;
     static int64_t audio_callback_time;
 
-    void video_image_display();
 
     static inline void fill_rectangle(int x, int y, int w, int h);
 
-    void video_audio_display();
+    void VideoImageDisplay();
+    void VideoAudioDisplay();
 
     void do_exit();
-    static void do_exit(VideoState* that);
+    static void do_exit(VideoState *that);
 
-    void stream_close();
+    static void StreamClose(VideoState *&that);
+    void StreamClose();
+    static VideoState *StreamOpen(const char *filename,
+                                  AVInputFormat *iformat,
+                                  int av_sync_type);
+
+    /* this thread gets the stream from the disk or the network */
+    static int read_thread(void *arg);
+
+    static int genpts;
+
+    static int64_t start_time;
+    static int64_t duration;
+
+    static int decode_interrupt_cb(void *ctx)
+    {
+        auto is = (VideoState *)ctx;
+        assert(is);
+        return is->abort_request;
+    }
+
+
+
+    /* open a given stream. Return 0 if OK */
+    int StreamComponentOpen(int stream_index);
+
+    void StreamComponentClose(int stream_index);
 
     /* display the current picture, if any */
     void video_display();
-
-    void stream_component_close(int stream_index);
-
-    /* open a given stream. Return 0 if OK */
-    int stream_component_open(int stream_index);
 
     int video_open();
 
@@ -234,9 +266,7 @@ struct VideoState {
     void seek_chapter(int incr);
 
     /* handle an event sent by the GUI */
-    void event_loop();
-
-
+    void EventLoop();
 
     int get_master_sync_type();
 
@@ -246,14 +276,14 @@ struct VideoState {
     void check_external_clock_speed();
 
     /* seek in the stream */
-    void stream_seek(int64_t pos, int64_t rel, int seek_by_bytes);
+    void StreamSeek(int64_t pos, int64_t rel, int seek_by_bytes);
 
     /* pause or resume the video */
-    void stream_toggle_pause();
+    void StreamTogglePause();
 
-    void toggle_pause();
+    void TogglePause();
 
-    void toggle_mute();
+    void ToggleMute();
 
     void update_volume(int sign, double step);
 
@@ -268,44 +298,51 @@ struct VideoState {
     /* called to display each frame */
     static void video_refresh(void *opaque, double *remaining_time);
 
-    int queue_picture(AVFrame *src_frame, double pts, double duration, int64_t pos, int serial);
+    int queue_picture(AVFrame *src_frame,
+                      double pts,
+                      double duration,
+                      int64_t pos,
+                      int serial);
 
     int get_video_frame(AVFrame *frame);
 
-
-    int configure_video_filters(AVFilterGraph *graph, const char *vfilters, AVFrame *frame);
+    int ConfigureVideoFilters(AVFilterGraph *graph,
+                                const char *vfilters,
+                                AVFrame *frame);
 
     int configure_audio_filters(const char *afilters, int force_output_format);
 
-
     /**
- * Decode one audio frame and return its uncompressed size.
- *
- * The processed audio frame is decoded, converted if required, and
- * stored in is->audio_buf, with size in bytes given by the return
- * value.
- */
-     int audio_decode_frame();
+     * Decode one audio frame and return its uncompressed size.
+     *
+     * The processed audio frame is decoded, converted if required, and
+     * stored in is->audio_buf, with size in bytes given by the return
+     * value.
+     */
+    int audio_decode_frame();
 
     /* copy samples for viewing in editor window */
-     void update_sample_display(short *samples, int samples_size);
+    void update_sample_display(short *samples, int samples_size);
 
-/* return the wanted number of samples to get better sync if sync_type is video
- * or external master clock */
+    /* return the wanted number of samples to get better sync if sync_type is
+     * video or external master clock */
     int synchronize_audio(int nb_samples);
-
-
 
     //////////
 
     static unsigned sws_flags;
-    static int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_convert_ctx);
+    static int upload_texture(SDL_Texture **tex,
+                              AVFrame *frame,
+                              struct SwsContext **img_convert_ctx);
 
-    static int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params);
+    static int audio_open(void *opaque,
+                          int64_t wanted_channel_layout,
+                          int wanted_nb_channels,
+                          int wanted_sample_rate,
+                          struct AudioParams *audio_hw_params);
 
     /* prepare a new audio buffer */
     static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
-
 
     static int audio_thread(void *arg);
 
@@ -331,7 +368,6 @@ struct VideoState {
     static char *afilters;
 
     static AVPacket flush_pkt;
-
 
     static int autorotate;
     static int find_stream_info;
@@ -362,16 +398,14 @@ struct VideoState {
 
     static int nb_vfilters;
 
-
     static int audio_disable;
     static int video_disable;
     static int subtitle_disable;
-    static const char* wanted_stream_spec[AVMEDIA_TYPE_NB];
+    static const char *wanted_stream_spec[AVMEDIA_TYPE_NB];
     static int seek_by_bytes;
-    static float seek_interval ;
+    static float seek_interval;
     static int display_disable;
     static int borderless;
     static int alwaysontop;
-    static int startup_volume ;
+    static int startup_volume;
 };
-
