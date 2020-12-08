@@ -640,12 +640,11 @@ void VideoState::StreamComponentClose(int stream_index)
     }
 }
 
-int VideoState::audio_open(void *opaque,
-                           int64_t wanted_channel_layout,
+int VideoState::audio_open(int64_t wanted_channel_layout,
                            int wanted_nb_channels,
-                           int wanted_sample_rate,
-                           struct AudioParams *audio_hw_params)
+                           int wanted_sample_rate)
 {
+    struct AudioParams *audio_hw_params = &audio_tgt;
     SDL_AudioSpec wanted_spec, spec;
     const char *env;
     static const int next_nb_channels[] = { 0, 0, 1, 6, 2, 6, 4, 6 };
@@ -682,7 +681,7 @@ int VideoState::audio_open(void *opaque,
         FFMAX(SDL_AUDIO_MIN_BUFFER_SIZE,
               2 << av_log2(wanted_spec.freq / SDL_AUDIO_MAX_CALLBACKS_PER_SEC));
     wanted_spec.callback = sdl_audio_callback;
-    wanted_spec.userdata = opaque;
+    wanted_spec.userdata = this;
     while (!(audio_dev =
                  SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec,
                                      SDL_AUDIO_ALLOW_FREQUENCY_CHANGE |
@@ -849,8 +848,7 @@ int VideoState::StreamComponentOpen(int stream_index)
 #endif
 
         /* prepare audio output */
-        if ((ret = audio_open(this, channel_layout, nb_channels, sample_rate,
-                              &this->audio_tgt)) < 0)
+        if ((ret = audio_open(channel_layout, nb_channels, sample_rate)) < 0)
             goto fail;
         this->audio_hw_buf_size = ret;
         this->audio_src = this->audio_tgt;
@@ -1704,8 +1702,8 @@ int VideoState::get_video_frame(AVFrame *frame)
 // extern int filter_nbthreads;
 
 int VideoState::ConfigureVideoFilters(AVFilterGraph *graph,
-                                        const char *vfilters,
-                                        AVFrame *frame)
+                                      const char *vfilters,
+                                      AVFrame *frame)
 {
     enum AVPixelFormat pix_fmts[FF_ARRAY_ELEMS(sdl_texture_format_map)];
     char sws_flags_str[512] = "";

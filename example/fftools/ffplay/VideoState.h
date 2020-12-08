@@ -213,7 +213,6 @@ struct VideoState {
     static SDL_RendererInfo renderer_info;
     static int64_t audio_callback_time;
 
-
     static inline void fill_rectangle(int x, int y, int w, int h);
 
     void VideoImageDisplay();
@@ -243,8 +242,6 @@ struct VideoState {
         return is->abort_request;
     }
 
-
-
     /* open a given stream. Return 0 if OK */
     int StreamComponentOpen(int stream_index);
 
@@ -254,6 +251,10 @@ struct VideoState {
     void video_display();
 
     int video_open();
+
+    int audio_open(int64_t wanted_channel_layout,
+                   int wanted_nb_channels,
+                   int wanted_sample_rate);
 
     void stream_cycle_channel(int codec_type);
 
@@ -307,8 +308,8 @@ struct VideoState {
     int get_video_frame(AVFrame *frame);
 
     int ConfigureVideoFilters(AVFilterGraph *graph,
-                                const char *vfilters,
-                                AVFrame *frame);
+                              const char *vfilters,
+                              AVFrame *frame);
 
     int configure_audio_filters(const char *afilters, int force_output_format);
 
@@ -335,12 +336,6 @@ struct VideoState {
                               AVFrame *frame,
                               struct SwsContext **img_convert_ctx);
 
-    static int audio_open(void *opaque,
-                          int64_t wanted_channel_layout,
-                          int wanted_nb_channels,
-                          int wanted_sample_rate,
-                          struct AudioParams *audio_hw_params);
-
     /* prepare a new audio buffer */
     static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
 
@@ -356,7 +351,7 @@ struct VideoState {
     static int show_status;
 
     static const char **vfilters_list;
-    static SDL_AudioDeviceID audio_dev;
+    SDL_AudioDeviceID audio_dev;
     static int lowres;
 
     static const char *audio_codec_name;

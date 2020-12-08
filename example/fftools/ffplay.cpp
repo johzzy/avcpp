@@ -141,8 +141,6 @@ SDL_Window *VideoState::window;
 SDL_Renderer *VideoState::renderer;
 SDL_RendererInfo VideoState::renderer_info = { 0 };
 
-SDL_AudioDeviceID VideoState::audio_dev;
-
 #if CONFIG_AVFILTER
 static int opt_add_vfilter(void *optctx, const char *opt, const char *arg)
 {
