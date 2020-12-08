@@ -133,14 +133,28 @@ int VideoState::filter_nbthreads = 0;
 int VideoState::is_full_screen;
 int64_t VideoState::audio_callback_time;
 
-AVPacket VideoState::flush_pkt;
-
 SDL_Window *VideoState::window;
 SDL_Renderer *VideoState::renderer;
 SDL_RendererInfo VideoState::renderer_info = { 0 };
 
+struct OptionContext {
+    void trace(const char *fn, int line, const char *file)
+    {
+        printf("%s %d %s\n", fn, line, file);
+    }
+
+    static void Trace(void *ctx, const char *fn, int line, const char *file)
+    {
+        if (!ctx)
+            return;
+        auto that = static_cast<OptionContext *>(ctx);
+        that->trace(fn, line, file);
+    }
+};
+
 static int opt_add_vfilter(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     GROW_ARRAY(VideoState::vfilters_list, VideoState::nb_vfilters);
     VideoState::vfilters_list[VideoState::nb_vfilters - 1] = arg;
     return 0;
@@ -153,12 +167,14 @@ static void sigterm_handler(int sig)
 
 static int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     av_log(NULL, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
     return opt_default(NULL, "video_size", arg);
 }
 
 static int opt_width(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     VideoState::screen_width =
         parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
@@ -166,6 +182,7 @@ static int opt_width(void *optctx, const char *opt, const char *arg)
 
 static int opt_height(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     VideoState::screen_height =
         parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
@@ -173,6 +190,7 @@ static int opt_height(void *optctx, const char *opt, const char *arg)
 
 static int opt_format(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     file_iformat = av_find_input_format(arg);
     if (!file_iformat) {
         av_log(NULL, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
@@ -183,6 +201,7 @@ static int opt_format(void *optctx, const char *opt, const char *arg)
 
 static int opt_frame_pix_fmt(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     av_log(NULL, AV_LOG_WARNING,
            "Option -pix_fmt is deprecated, use -pixel_format.\n");
     return opt_default(NULL, "pixel_format", arg);
@@ -190,6 +209,7 @@ static int opt_frame_pix_fmt(void *optctx, const char *opt, const char *arg)
 
 static int opt_sync(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     if (!strcmp(arg, "audio"))
         av_sync_type = AV_SYNC_AUDIO_MASTER;
     else if (!strcmp(arg, "video"))
@@ -205,18 +225,21 @@ static int opt_sync(void *optctx, const char *opt, const char *arg)
 
 static int opt_seek(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     VideoState::start_time = parse_time_or_die(opt, arg, 1);
     return 0;
 }
 
 static int opt_duration(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     VideoState::duration = parse_time_or_die(opt, arg, 1);
     return 0;
 }
 
 static int opt_show_mode(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     VideoState::show_mode_ =
         !strcmp(arg, "video")   ? VideoState::SHOW_MODE_VIDEO
         : !strcmp(arg, "waves") ? VideoState::SHOW_MODE_WAVES
@@ -229,6 +252,7 @@ static int opt_show_mode(void *optctx, const char *opt, const char *arg)
 
 static void opt_input_file(void *optctx, const char *filename)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     if (VideoState::input_filename) {
         av_log(NULL, AV_LOG_FATAL,
                "Argument '%s' provided as input filename, but '%s' was already "
@@ -243,6 +267,7 @@ static void opt_input_file(void *optctx, const char *filename)
 
 static int opt_codec(void *optctx, const char *opt, const char *arg)
 {
+    OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     const char *spec = strchr(opt, ':');
     if (!spec) {
         av_log(NULL, AV_LOG_ERROR,
@@ -389,9 +414,7 @@ int main(int argc, char **argv)
     parse_loglevel(argc, argv, options);
 
     /* register all codecs, demux and protocols */
-#if CONFIG_AVDEVICE
     avdevice_register_all();
-#endif
     avformat_network_init();
 
     init_opts();
@@ -400,8 +423,9 @@ int main(int argc, char **argv)
     signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 
     show_banner(argc, argv, options);
-
-    parse_options(NULL, argc, argv, options, opt_input_file);
+    OptionContext optctx;
+    parse_options(&optctx, argc, argv, options, opt_input_file);
+    // assert(false);
 
     if (!VideoState::input_filename) {
         show_usage();
@@ -437,19 +461,10 @@ int main(int argc, char **argv)
     SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
     SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
 
-    av_init_packet(&VideoState::flush_pkt);
-    VideoState::flush_pkt.data = (uint8_t *)&VideoState::flush_pkt;
-
     if (!VideoState::display_disable) {
         int flags = SDL_WINDOW_HIDDEN;
         if (VideoState::alwaysontop)
-#if SDL_VERSION_ATLEAST(2, 0, 5)
             flags |= SDL_WINDOW_ALWAYS_ON_TOP;
-#else
-            av_log(NULL, AV_LOG_WARNING,
-                   "Your SDL version doesn't support SDL_WINDOW_ALWAYS_ON_TOP. "
-                   "Feature will be inactive.\n");
-#endif
         if (VideoState::borderless)
             flags |= SDL_WINDOW_BORDERLESS;
         else
@@ -481,20 +496,20 @@ int main(int argc, char **argv)
             !VideoState::renderer_info.num_texture_formats) {
             av_log(NULL, AV_LOG_FATAL,
                    "Failed to create window or renderer: %s", SDL_GetError());
-            VideoState::do_exit(NULL);
+            VideoState::do_exit();
         }
     }
 
-    auto is = VideoState::StreamOpen(VideoState::input_filename, file_iformat,
-                                     av_sync_type);
-    if (!is) {
+    auto is = VideoState{};
+
+    auto state =
+        is.StreamOpen(VideoState::input_filename, file_iformat, av_sync_type);
+    if (!state) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
-        VideoState::do_exit(NULL);
+        VideoState::do_exit();
     }
 
-    is->EventLoop();
-
-    /* never returns */
+    is.EventLoop();
 
     return 0;
 }

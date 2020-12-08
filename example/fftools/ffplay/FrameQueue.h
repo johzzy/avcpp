@@ -56,159 +56,25 @@ struct PacketQueue {
 
     const AVPacket* flush_pkt_{ nullptr};
 
-    void Flush()
-    {
-        SDL_LockMutex(mutex);
-        MyAVPacketList *pkt1;
-        for (auto pkt = first_pkt; pkt; pkt = pkt1) {
-            pkt1 = pkt->next;
-            av_packet_unref(&pkt->pkt);
-            av_freep(&pkt);
-        }
-        last_pkt = NULL;
-        first_pkt = NULL;
-        nb_packets = 0;
-        size = 0;
-        duration = 0;
-        SDL_UnlockMutex(mutex);
-    }
+    void Flush();
 
-    void Destroy()
-    {
-        Flush();
-        SDL_DestroyMutex(mutex);
-        SDL_DestroyCond(cond);
-    }
+    void Destroy();
 
-    void Start(AVPacket& flush_pkt)
-    {
-        SDL_LockMutex(mutex);
-        flush_pkt_ = &flush_pkt;
-        abort_request = 0;
-        PutPrivate(&flush_pkt);
-        SDL_UnlockMutex(mutex);
-    }
+    void Start(AVPacket& flush_pkt);
 
-    int PutPrivate(AVPacket *pkt)
-    {
-        MyAVPacketList *pkt1;
+    int PutPrivate(AVPacket *pkt);
 
-        if (abort_request)
-            return -1;
+    int Put(AVPacket *pkt);
 
-        pkt1 = (MyAVPacketList *)av_malloc(sizeof(MyAVPacketList));
-        if (!pkt1)
-            return -1;
-        pkt1->pkt = *pkt;
-        pkt1->next = NULL;
-        if (pkt == flush_pkt_)
-            serial++;
-        pkt1->serial = serial;
-
-        if (!last_pkt)
-            first_pkt = pkt1;
-        else
-            last_pkt->next = pkt1;
-        last_pkt = pkt1;
-        nb_packets++;
-        size += pkt1->pkt.size + sizeof(*pkt1);
-        duration += pkt1->pkt.duration;
-        /* XXX: should duplicate packet data in DV case */
-        SDL_CondSignal(cond);
-        return 0;
-    }
-
-    int Put(AVPacket *pkt)
-    {
-        int ret;
-
-        SDL_LockMutex(mutex);
-        ret = PutPrivate(pkt);
-        SDL_UnlockMutex(mutex);
-
-        if (pkt != flush_pkt_ && ret < 0)
-            av_packet_unref(pkt);
-
-        return ret;
-    }
-
-    int PutNullPacket(int stream_index)
-    {
-        AVPacket pkt1, *pkt = &pkt1;
-        av_init_packet(pkt);
-        pkt->data = NULL;
-        pkt->size = 0;
-        pkt->stream_index = stream_index;
-        return Put(pkt);
-    }
+    int PutNullPacket(int stream_index);
 
     /* packet queue handling */
-    int Init()
-    {
-        memset(this, 0, sizeof(PacketQueue));
-        mutex = SDL_CreateMutex();
-        if (!mutex) {
-            av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
-            return AVERROR(ENOMEM);
-        }
-        cond = SDL_CreateCond();
-        if (!cond) {
-            av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
-            return AVERROR(ENOMEM);
-        }
-        abort_request = 1;
-        return 0;
-    }
+    int Init();
 
-    void Abort()
-    {
-        SDL_LockMutex(mutex);
-
-        abort_request = 1;
-
-        SDL_CondSignal(cond);
-
-        SDL_UnlockMutex(mutex);
-    }
+    void Abort();
 
     /* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
-    int Get(AVPacket *pkt, int block, int *serial)
-    {
-        MyAVPacketList *pkt1;
-        int ret;
-
-        SDL_LockMutex(mutex);
-
-        for (;;) {
-            if (abort_request) {
-                ret = -1;
-                break;
-            }
-
-            pkt1 = first_pkt;
-            if (pkt1) {
-                first_pkt = pkt1->next;
-                if (!first_pkt)
-                    last_pkt = NULL;
-                nb_packets--;
-                size -= pkt1->pkt.size + sizeof(*pkt1);
-                duration -= pkt1->pkt.duration;
-                *pkt = pkt1->pkt;
-                if (serial)
-                    *serial = pkt1->serial;
-                av_free(pkt1);
-                ret = 1;
-                break;
-            } else if (!block) {
-                ret = 0;
-                break;
-            } else {
-                SDL_CondWait(cond, mutex);
-            }
-        }
-        SDL_UnlockMutex(mutex);
-        return ret;
-    }
+    int Get(AVPacket *pkt, int block, int *serial);
 
 };
 
@@ -224,130 +90,32 @@ struct FrameQueue {
     SDL_cond *cond;
     PacketQueue *pktq;
 
-    int Init(PacketQueue *pktq, int max_size, int keep_last)
-    {
-        int i;
-        memset(this, 0, sizeof(FrameQueue));
-        if (!(mutex = SDL_CreateMutex())) {
-            av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
-            return AVERROR(ENOMEM);
-        }
-        if (!(cond = SDL_CreateCond())) {
-            av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
-            return AVERROR(ENOMEM);
-        }
-        this->pktq = pktq;
-        this->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
-        this->keep_last = !!keep_last;
-        for (i = 0; i < max_size; i++)
-            if (!(queue[i].frame = av_frame_alloc()))
-                return AVERROR(ENOMEM);
-        return 0;
-    }
+    int Init(PacketQueue *pktq, int max_size, int keep_last);
 
-    void Destory()
-    {
-        for (int i = 0; i < max_size; i++) {
-            Frame *vp = &queue[i];
-            vp->UnrefItem();
-            av_frame_free(&vp->frame);
-        }
-        SDL_DestroyMutex(mutex);
-        SDL_DestroyCond(cond);
-    }
+    void Destory();
 
-    void Signal()
-    {
-        SDL_LockMutex(mutex);
-        SDL_CondSignal(cond);
-        SDL_UnlockMutex(mutex);
-    }
+    void Signal();
 
-    Frame *Peek()
-    {
-        return &queue[(rindex + rindex_shown) % max_size];
-    }
+    Frame *Peek();
 
-    Frame *PeekNext()
-    {
-        return &queue[(rindex + rindex_shown + 1) % max_size];
-    }
+    Frame *PeekNext();
 
     Frame *PeekLast()
     {
         return &queue[rindex];
     }
 
-    Frame *PeekWritable()
-    {
-        /* wait until we have space to put a new frame */
-        SDL_LockMutex(mutex);
-        while (size >= max_size &&
-               !pktq->abort_request) {
-            SDL_CondWait(cond, mutex);
-        }
-        SDL_UnlockMutex(mutex);
+    Frame *PeekWritable();
 
-        if (pktq->abort_request)
-            return NULL;
+    Frame *PeekReadable();
 
-        return &queue[windex];
-    }
+    void Push();
 
-    Frame *PeekReadable()
-    {
-        /* wait until we have a readable a new frame */
-        SDL_LockMutex(mutex);
-        while (size - rindex_shown <= 0 &&
-               !pktq->abort_request) {
-            SDL_CondWait(cond, mutex);
-        }
-        SDL_UnlockMutex(mutex);
-
-        if (pktq->abort_request)
-            return NULL;
-
-        return &queue[(rindex + rindex_shown) % max_size];
-    }
-
-    void Push()
-    {
-        if (++windex == max_size)
-            windex = 0;
-        SDL_LockMutex(mutex);
-        size++;
-        SDL_CondSignal(cond);
-        SDL_UnlockMutex(mutex);
-    }
-
-    void Next()
-    {
-        if (keep_last && !rindex_shown) {
-            rindex_shown = 1;
-            return;
-        }
-        queue[rindex].UnrefItem();
-        if (++rindex == max_size)
-            rindex = 0;
-        SDL_LockMutex(mutex);
-        size--;
-        SDL_CondSignal(cond);
-        SDL_UnlockMutex(mutex);
-    }
+    void Next();
 
     /* return the number of undisplayed frames in the queue */
-    int NbRemaining() const
-    {
-        return size - rindex_shown;
-    }
+    int NbRemaining() const;
 
     /* return last shown position */
-    int64_t LastPosition() const
-    {
-        auto fp = &queue[rindex];
-        if (rindex_shown && fp->serial == pktq->serial)
-            return fp->pos;
-        else
-            return -1;
-    }
+    int64_t LastPosition() const;
 };

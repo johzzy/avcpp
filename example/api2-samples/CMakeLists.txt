@@ -91,6 +91,7 @@ set(ffplay_Dependent
         ../fftools/ffplay/common.cpp
         ../fftools/ffplay/VideoState.cpp
         ../fftools/ffplay/Decoder.cpp
+        ../fftools/ffplay/FrameQueue.cpp
         ../filters/logger.cpp)
 
 file(GLOB_RECURSE FFTOOL_COMPAT CONFIGURE_DEPENDS ../fftools/*.c)

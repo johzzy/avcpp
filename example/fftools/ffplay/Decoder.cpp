@@ -16,9 +16,9 @@ void Decoder::Init(AVCodecContext *avctx,
     pkt_serial = -1;
 }
 int Decoder::Start(AVPacket &flush_pkt,
-                           int (*fn)(void *),
-                           const char *thread_name,
-                           void *arg)
+                   int (*fn)(void *),
+                   const char *thread_name,
+                   void *arg)
 {
     assert(queue);
     queue->Start(flush_pkt);
@@ -29,7 +29,7 @@ int Decoder::Start(AVPacket &flush_pkt,
     }
     return 0;
 }
-int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub)
+int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
 {
     int ret = AVERROR(EAGAIN);
 
@@ -42,32 +42,34 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub)
                     return -1;
 
                 switch (avctx->codec_type) {
-                    case AVMEDIA_TYPE_VIDEO:
-                        ret = avcodec_receive_frame(avctx, frame);
-                        if (ret >= 0) {
-                            if (decoder_reorder_pts == -1) {
-                                frame->pts = frame->best_effort_timestamp;
-                            } else if (!decoder_reorder_pts) {
-                                frame->pts = frame->pkt_dts;
-                            }
+                case AVMEDIA_TYPE_VIDEO:
+                    ret = avcodec_receive_frame(avctx, frame);
+                    if (ret >= 0) {
+                        if (decoder_reorder_pts == -1) {
+                            frame->pts = frame->best_effort_timestamp;
+                        } else if (!decoder_reorder_pts) {
+                            frame->pts = frame->pkt_dts;
                         }
-                        break;
-                    case AVMEDIA_TYPE_AUDIO:
-                        ret = avcodec_receive_frame(avctx, frame);
-                        if (ret >= 0) {
-                            AVRational tb = (AVRational){1, frame->sample_rate};
-                            if (frame->pts != AV_NOPTS_VALUE)
-                                frame->pts = av_rescale_q(frame->pts, avctx->pkt_timebase, tb);
-                            else if (next_pts != AV_NOPTS_VALUE)
-                                frame->pts = av_rescale_q(next_pts, next_pts_tb, tb);
-                            if (frame->pts != AV_NOPTS_VALUE) {
-                                next_pts = frame->pts + frame->nb_samples;
-                                next_pts_tb = tb;
-                            }
+                    }
+                    break;
+                case AVMEDIA_TYPE_AUDIO:
+                    ret = avcodec_receive_frame(avctx, frame);
+                    if (ret >= 0) {
+                        AVRational tb = (AVRational){ 1, frame->sample_rate };
+                        if (frame->pts != AV_NOPTS_VALUE)
+                            frame->pts = av_rescale_q(frame->pts,
+                                                      avctx->pkt_timebase, tb);
+                        else if (next_pts != AV_NOPTS_VALUE)
+                            frame->pts =
+                                av_rescale_q(next_pts, next_pts_tb, tb);
+                        if (frame->pts != AV_NOPTS_VALUE) {
+                            next_pts = frame->pts + frame->nb_samples;
+                            next_pts_tb = tb;
                         }
-                        break;
-                    default:
-                        assert(false);
+                    }
+                    break;
+                default:
+                    assert(false);
                 }
                 if (ret == AVERROR_EOF) {
                     finished = pkt_serial;
@@ -110,11 +112,15 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub)
                         packet_pending = 1;
                         av_packet_move_ref(&pkt, &pkt);
                     }
-                    ret = got_frame ? 0 : (pkt.data ? AVERROR(EAGAIN) : AVERROR_EOF);
+                    ret = got_frame
+                              ? 0
+                              : (pkt.data ? AVERROR(EAGAIN) : AVERROR_EOF);
                 }
             } else {
                 if (avcodec_send_packet(avctx, &pkt) == AVERROR(EAGAIN)) {
-                    av_log(avctx, AV_LOG_ERROR, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+                    av_log(avctx, AV_LOG_ERROR,
+                           "Receive_frame and send_packet both returned "
+                           "EAGAIN, which is an API violation.\n");
                     packet_pending = 1;
                     av_packet_move_ref(&pkt, &pkt);
                 }
@@ -123,12 +129,12 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub)
         }
     }
 }
-void Decoder::decoder_destroy()
+void Decoder::Destroy()
 {
     av_packet_unref(&pkt);
     avcodec_free_context(&avctx);
 }
-void Decoder::decoder_abort(FrameQueue *fq)
+void Decoder::Abort(FrameQueue *fq)
 {
     queue->Abort();
     fq->Signal();

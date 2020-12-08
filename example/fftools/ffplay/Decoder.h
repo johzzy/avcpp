@@ -7,7 +7,6 @@
 #include <cassert>
 #include <SDL2/SDL_thread.h>
 
-
 extern "C" {
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
@@ -36,14 +35,18 @@ struct Decoder {
 
     static int decoder_reorder_pts;
 
-    void Init(AVCodecContext *avctx, PacketQueue *queue, SDL_cond *empty_queue_cond);
+    void Init(AVCodecContext *avctx,
+              PacketQueue *queue,
+              SDL_cond *empty_queue_cond);
 
-    int Start(AVPacket& flush_pkt, int (*fn)(void *), const char *thread_name, void* arg);
+    int Start(AVPacket &flush_pkt,
+              int (*fn)(void *),
+              const char *thread_name,
+              void *arg);
 
-    int decoder_decode_frame(AVFrame *frame, AVSubtitle *sub);
+    int DecodeFrame(AVFrame *frame, AVSubtitle *sub);
 
-    void decoder_destroy();
+    void Destroy();
 
-    void decoder_abort(FrameQueue *fq);
-
+    void Abort(FrameQueue *fq);
 };

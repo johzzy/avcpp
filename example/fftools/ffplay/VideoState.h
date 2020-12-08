@@ -24,6 +24,7 @@ extern "C" {
 
 #include <cstdint>
 #include <cmath>
+#include <string>
 
 /* NOTE: the size must be big enough to compensate the hardware audio buffersize
  * size */
@@ -99,6 +100,22 @@ int realloc_texture(SDL_Texture **texture,
                     SDL_BlendMode blendmode,
                     int init_texture);
 
+struct VideoStateExtra {
+    AVPacket flush_pkt;
+
+    VideoStateExtra()
+    {
+        av_init_packet(&flush_pkt);
+        flush_pkt.data = (uint8_t *)&flush_pkt;
+    }
+};
+
+struct FourierContext {
+    RDFTContext *rdft{ nullptr };
+    FFTSample *rdft_data{ nullptr };
+    int rdft_bits{ 0 };
+};
+
 struct VideoState {
     SDL_Thread *read_tid;
     AVInputFormat *iformat;
@@ -169,9 +186,7 @@ struct VideoState {
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
     int last_i_start;
-    RDFTContext *rdft;
-    int rdft_bits;
-    FFTSample *rdft_data;
+    FourierContext fourier;
     int xpos;
     double last_vis_time;
     SDL_Texture *vis_texture;
@@ -194,7 +209,7 @@ struct VideoState {
     struct SwsContext *sub_convert_ctx;
     int eof;
 
-    char *filename;
+    std::string filename;
     int width, height, xleft, ytop;
     int step;
 
@@ -213,19 +228,17 @@ struct VideoState {
     static SDL_RendererInfo renderer_info;
     static int64_t audio_callback_time;
 
-    static inline void fill_rectangle(int x, int y, int w, int h);
+    static inline void FillRectangle(int x, int y, int w, int h);
 
     void VideoImageDisplay();
     void VideoAudioDisplay();
 
-    void do_exit();
-    static void do_exit(VideoState *that);
+    static void do_exit();
 
-    static void StreamClose(VideoState *&that);
     void StreamClose();
-    static VideoState *StreamOpen(const char *filename,
-                                  AVInputFormat *iformat,
-                                  int av_sync_type);
+    bool StreamOpen(const char *filename,
+                    AVInputFormat *iformat,
+                    int av_sync_type);
 
     /* this thread gets the stream from the disk or the network */
     static int read_thread(void *arg);
@@ -248,33 +261,33 @@ struct VideoState {
     void StreamComponentClose(int stream_index);
 
     /* display the current picture, if any */
-    void video_display();
+    void VideoDisplay();
 
-    int video_open();
+    int VideoOpen();
 
-    int audio_open(int64_t wanted_channel_layout,
-                   int wanted_nb_channels,
-                   int wanted_sample_rate);
+    int AudioOpen(int64_t wanted_channel_layout,
+                  int wanted_nb_channels,
+                  int wanted_sample_rate);
 
-    void stream_cycle_channel(int codec_type);
+    void StreamCycleChannel(int codec_type);
 
-    void toggle_full_screen();
+    void ToggleFullScreen();
 
     void toggle_audio_display();
 
-    void refresh_loop_wait_event(SDL_Event *event);
+    void RefreshLoopWaitEvent(SDL_Event *event);
 
-    void seek_chapter(int incr);
+    void SeekChapter(int incr);
 
     /* handle an event sent by the GUI */
     void EventLoop();
 
-    int get_master_sync_type();
+    int GetMasterSyncType();
 
     /* get the current master clock value */
-    double get_master_clock();
+    double GetMasterClock();
 
-    void check_external_clock_speed();
+    void CheckExternalClockSpeed();
 
     /* seek in the stream */
     void StreamSeek(int64_t pos, int64_t rel, int seek_by_bytes);
@@ -286,18 +299,18 @@ struct VideoState {
 
     void ToggleMute();
 
-    void update_volume(int sign, double step);
+    void UpdateVolume(int sign, double step);
 
-    void step_to_next_frame();
+    void StepToNextFrame();
 
-    double compute_target_delay(double delay);
+    double TargetDelay(double delay);
 
     double vp_duration(Frame *vp, Frame *nextvp);
 
-    void update_video_pts(double pts, int64_t pos, int serial);
+    void UpdateVideoPTS(double pts, int64_t pos, int serial);
 
     /* called to display each frame */
-    static void video_refresh(void *opaque, double *remaining_time);
+    void VideoRefresh(double *remaining_time);
 
     int queue_picture(AVFrame *src_frame,
                       double pts,
@@ -305,13 +318,13 @@ struct VideoState {
                       int64_t pos,
                       int serial);
 
-    int get_video_frame(AVFrame *frame);
+    int GetVideoFrame(AVFrame *frame);
 
     int ConfigureVideoFilters(AVFilterGraph *graph,
                               const char *vfilters,
                               AVFrame *frame);
 
-    int configure_audio_filters(const char *afilters, int force_output_format);
+    int ConfigureAudioFilters(const char *afilters, int force_output_format);
 
     /**
      * Decode one audio frame and return its uncompressed size.
@@ -320,14 +333,14 @@ struct VideoState {
      * stored in is->audio_buf, with size in bytes given by the return
      * value.
      */
-    int audio_decode_frame();
+    int AudioDecodeFrame();
 
     /* copy samples for viewing in editor window */
-    void update_sample_display(short *samples, int samples_size);
+    void UpdateSampleDisplay(short *samples, int samples_size);
 
     /* return the wanted number of samples to get better sync if sync_type is
      * video or external master clock */
-    int synchronize_audio(int nb_samples);
+    int SynchronizeAudio(int nb_samples);
 
     //////////
 
@@ -361,8 +374,6 @@ struct VideoState {
     static int fast;
 
     static char *afilters;
-
-    static AVPacket flush_pkt;
 
     static int autorotate;
     static int find_stream_info;
@@ -403,4 +414,6 @@ struct VideoState {
     static int borderless;
     static int alwaysontop;
     static int startup_volume;
+
+    VideoStateExtra extra;
 };

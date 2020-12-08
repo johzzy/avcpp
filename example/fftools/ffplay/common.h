@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include <cstdint>
+#include "cmdutils.h"
 
 int compute_mod(int a, int b);
 
@@ -34,3 +35,4 @@ int64_t get_valid_channel_layout(int64_t channel_layout, int channels);
 // enum AVSampleFormat;
 int cmp_audio_fmts(enum AVSampleFormat fmt1, int64_t channel_count1,
                    enum AVSampleFormat fmt2, int64_t channel_count2);
+
