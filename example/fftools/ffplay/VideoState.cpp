@@ -2161,11 +2161,9 @@ int VideoState::audio_thread(void *arg)
     auto is = (VideoState *)arg;
     AVFrame *frame = av_frame_alloc();
     Frame *af;
-#if CONFIG_AVFILTER
     int last_serial = -1;
     int64_t dec_channel_layout;
     int reconfigure;
-#endif
     int got_frame = 0;
     AVRational tb;
     int ret = 0;
@@ -2180,7 +2178,6 @@ int VideoState::audio_thread(void *arg)
         if (got_frame) {
             tb = (AVRational){ 1, frame->sample_rate };
 
-#if CONFIG_AVFILTER
             dec_channel_layout = get_valid_channel_layout(frame->channel_layout,
                                                           frame->channels);
 
@@ -2225,7 +2222,6 @@ int VideoState::audio_thread(void *arg)
             while ((ret = av_buffersink_get_frame_flags(is->out_audio_filter,
                                                         frame, 0)) >= 0) {
                 tb = av_buffersink_get_time_base(is->out_audio_filter);
-#endif
                 if (!(af = is->sampq.PeekWritable()))
                     goto the_end;
 
@@ -2240,19 +2236,15 @@ int VideoState::audio_thread(void *arg)
                 av_frame_move_ref(af->frame, frame);
                 is->sampq.Push();
 
-#if CONFIG_AVFILTER
                 if (is->audioq.serial != is->auddec.pkt_serial)
                     break;
             }
             if (ret == AVERROR_EOF)
                 is->auddec.finished = is->auddec.pkt_serial;
-#endif
         }
     } while (ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF);
 the_end:
-#if CONFIG_AVFILTER
     avfilter_graph_free(&is->agraph);
-#endif
     av_frame_free(&frame);
     return ret;
 }
@@ -2266,7 +2258,6 @@ int VideoState::video_thread(void *arg)
     AVRational tb = is->video_st->time_base;
     AVRational frame_rate = av_guess_frame_rate(is->ic, is->video_st, NULL);
 
-#if CONFIG_AVFILTER
     AVFilterGraph *graph = NULL;
     AVFilterContext *filt_out = NULL, *filt_in = NULL;
     int last_w = 0;
@@ -2274,7 +2265,6 @@ int VideoState::video_thread(void *arg)
     enum AVPixelFormat last_format = (AVPixelFormat)-2;
     int last_serial = -1;
     int last_vfilter_idx = 0;
-#endif
 
     if (!frame)
         return AVERROR(ENOMEM);
@@ -2286,7 +2276,6 @@ int VideoState::video_thread(void *arg)
         if (!ret)
             continue;
 
-#if CONFIG_AVFILTER
         if (last_w != frame->width || last_h != frame->height ||
             last_format != frame->format ||
             last_serial != is->viddec.pkt_serial ||
@@ -2350,7 +2339,7 @@ int VideoState::video_thread(void *arg)
             if (fabs(is->frame_last_filter_delay) > AV_NOSYNC_THRESHOLD / 10.0)
                 is->frame_last_filter_delay = 0;
             tb = av_buffersink_get_time_base(filt_out);
-#endif
+
             duration =
                 (frame_rate.num && frame_rate.den
                      ? av_q2d((AVRational){ frame_rate.den, frame_rate.num })
@@ -2360,19 +2349,18 @@ int VideoState::video_thread(void *arg)
             ret = is->queue_picture(frame, pts, duration, frame->pkt_pos,
                                     is->viddec.pkt_serial);
             av_frame_unref(frame);
-#if CONFIG_AVFILTER
+
             if (is->videoq.serial != is->viddec.pkt_serial)
                 break;
         }
-#endif
 
         if (ret < 0)
             goto the_end;
     }
 the_end:
-#if CONFIG_AVFILTER
+
     avfilter_graph_free(&graph);
-#endif
+
     av_frame_free(&frame);
     return 0;
 }
