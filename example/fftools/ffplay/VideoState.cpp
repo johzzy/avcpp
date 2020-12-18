@@ -318,18 +318,18 @@ void VideoState::VideoAudioDisplay()
         if (delay < data_used)
             delay = data_used;
 
-        i_start = x = compute_mod(this->sample_array_index - delay * channels,
+        i_start = x = compute_mod(fourier.sample_array_index - delay * channels,
                                   SAMPLE_ARRAY_SIZE);
         if (this->show_mode == VideoState::SHOW_MODE_WAVES) {
             h = INT_MIN;
             for (i = 0; i < 1000; i += channels) {
                 int idx = (SAMPLE_ARRAY_SIZE + x - i) % SAMPLE_ARRAY_SIZE;
-                int a = this->sample_array[idx];
-                int b = this->sample_array[(idx + 4 * channels) %
+                int a = fourier.sample_array[idx];
+                int b = fourier.sample_array[(idx + 4 * channels) %
                                            SAMPLE_ARRAY_SIZE];
-                int c = this->sample_array[(idx + 5 * channels) %
+                int c = fourier.sample_array[(idx + 5 * channels) %
                                            SAMPLE_ARRAY_SIZE];
-                int d = this->sample_array[(idx + 9 * channels) %
+                int d = fourier.sample_array[(idx + 9 * channels) %
                                            SAMPLE_ARRAY_SIZE];
                 int score = a - d;
                 if (h < score && (b ^ c) < 0) {
@@ -355,7 +355,7 @@ void VideoState::VideoAudioDisplay()
             i = i_start + ch;
             y1 = this->ytop + ch * h + (h / 2); /* position of center line */
             for (x = 0; x < this->width; x++) {
-                y = (this->sample_array[i] * h2) >> 15;
+                y = (fourier.sample_array[i] * h2) >> 15;
                 if (y < 0) {
                     y = -y;
                     ys = y1 - y;
@@ -407,7 +407,7 @@ void VideoState::VideoAudioDisplay()
                 i = i_start + ch;
                 for (x = 0; x < 2 * nb_freq; x++) {
                     double w = (x - nb_freq) * (1.0 / nb_freq);
-                    data[ch][x] = this->sample_array[i] * (1.0 - w * w);
+                    data[ch][x] = fourier.sample_array[i] * (1.0 - w * w);
                     i += channels;
                     if (i >= SAMPLE_ARRAY_SIZE)
                         i -= SAMPLE_ARRAY_SIZE;
@@ -581,12 +581,7 @@ void VideoState::StreamComponentClose(int stream_index)
         audio_buf1_size = 0;
         audio_buf = NULL;
 
-        if (fourier.rdft) {
-            av_rdft_end(fourier.rdft);
-            av_freep(&fourier.rdft_data);
-            fourier.rdft = nullptr;
-            fourier.rdft_bits = 0;
-        }
+        fourier.Close();
         break;
     case AVMEDIA_TYPE_VIDEO:
         this->viddec.Abort(&this->pictq);
@@ -2019,15 +2014,15 @@ void VideoState::UpdateSampleDisplay(short *samples, int samples_size)
 
     size = samples_size / sizeof(short);
     while (size > 0) {
-        len = SAMPLE_ARRAY_SIZE - this->sample_array_index;
+        len = SAMPLE_ARRAY_SIZE - fourier.sample_array_index;
         if (len > size)
             len = size;
-        memcpy(this->sample_array + this->sample_array_index, samples,
+        memcpy(fourier.sample_array + fourier.sample_array_index, samples,
                len * sizeof(short));
         samples += len;
-        this->sample_array_index += len;
-        if (this->sample_array_index >= SAMPLE_ARRAY_SIZE)
-            this->sample_array_index = 0;
+        fourier.sample_array_index += len;
+        if (fourier.sample_array_index >= SAMPLE_ARRAY_SIZE)
+            fourier.sample_array_index = 0;
         size -= len;
     }
 }

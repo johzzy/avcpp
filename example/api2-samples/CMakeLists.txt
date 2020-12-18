@@ -40,6 +40,8 @@ foreach (target ${TARGETS})
 
 endforeach ()
 
+#https://ortogonal.github.io/cmake-clang-tidy/
+set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
 
 find_package(spdlog)
 find_package(SDL2 REQUIRED)

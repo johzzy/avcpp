@@ -43,6 +43,6 @@ Codec findDecodingCodec(const std::string& name);
 
 Codec guessEncodingCodec(OutputFormat format, const char *name, const char *url, const char* mime, AVMediaType mediaType);
 
-} // ::fmpeg
+} // av
 
 #endif // CODEC_H

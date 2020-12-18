@@ -114,6 +114,18 @@ struct FourierContext {
     RDFTContext *rdft{ nullptr };
     FFTSample *rdft_data{ nullptr };
     int rdft_bits{ 0 };
+
+    int16_t sample_array[SAMPLE_ARRAY_SIZE];
+    int sample_array_index;
+
+    void Close() {
+        if (rdft) {
+            av_rdft_end(rdft);
+            av_freep(&rdft_data);
+            rdft = nullptr;
+            rdft_bits = 0;
+        }
+    }
 };
 
 struct VideoState {
@@ -183,8 +195,7 @@ struct VideoState {
     };
     ShowMode show_mode;
     static ShowMode show_mode_;
-    int16_t sample_array[SAMPLE_ARRAY_SIZE];
-    int sample_array_index;
+
     int last_i_start;
     FourierContext fourier;
     int xpos;

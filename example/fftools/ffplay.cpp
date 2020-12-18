@@ -168,7 +168,7 @@ static void sigterm_handler(int sig)
 static int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    av_log(NULL, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
+    av_log(nullptr, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
     return opt_default(NULL, "video_size", arg);
 }
 
@@ -193,7 +193,7 @@ static int opt_format(void *optctx, const char *opt, const char *arg)
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     file_iformat = av_find_input_format(arg);
     if (!file_iformat) {
-        av_log(NULL, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
+        av_log(nullptr, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
         return AVERROR(EINVAL);
     }
     return 0;
@@ -202,7 +202,7 @@ static int opt_format(void *optctx, const char *opt, const char *arg)
 static int opt_frame_pix_fmt(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    av_log(NULL, AV_LOG_WARNING,
+    av_log(nullptr, AV_LOG_WARNING,
            "Option -pix_fmt is deprecated, use -pixel_format.\n");
     return opt_default(NULL, "pixel_format", arg);
 }
@@ -217,7 +217,7 @@ static int opt_sync(void *optctx, const char *opt, const char *arg)
     else if (!strcmp(arg, "ext"))
         av_sync_type = AV_SYNC_EXTERNAL_CLOCK;
     else {
-        av_log(NULL, AV_LOG_ERROR, "Unknown value for %s: %s\n", opt, arg);
+        av_log(nullptr, AV_LOG_ERROR, "Unknown value for %s: %s\n", opt, arg);
         exit(1);
     }
     return 0;
@@ -254,7 +254,7 @@ static void opt_input_file(void *optctx, const char *filename)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     if (VideoState::input_filename) {
-        av_log(NULL, AV_LOG_FATAL,
+        av_log(nullptr, AV_LOG_FATAL,
                "Argument '%s' provided as input filename, but '%s' was already "
                "specified.\n",
                filename, VideoState::input_filename);
@@ -270,7 +270,7 @@ static int opt_codec(void *optctx, const char *opt, const char *arg)
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     const char *spec = strchr(opt, ':');
     if (!spec) {
-        av_log(NULL, AV_LOG_ERROR,
+        av_log(nullptr, AV_LOG_ERROR,
                "No media specifier was specified in '%s' in option '%s'\n", arg,
                opt);
         return AVERROR(EINVAL);
@@ -287,7 +287,7 @@ static int opt_codec(void *optctx, const char *opt, const char *arg)
         VideoState::video_codec_name = arg;
         break;
     default:
-        av_log(NULL, AV_LOG_ERROR,
+        av_log(nullptr, AV_LOG_ERROR,
                "Invalid media specifier '%s' in option '%s'\n", spec, opt);
         return AVERROR(EINVAL);
     }
@@ -354,9 +354,9 @@ static const OptionDef options[] = {
 
 static void show_usage(void)
 {
-    av_log(NULL, AV_LOG_INFO, "Simple media player\n");
-    av_log(NULL, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
-    av_log(NULL, AV_LOG_INFO, "\n");
+    av_log(nullptr, AV_LOG_INFO, "Simple media player\n");
+    av_log(nullptr, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
+    av_log(nullptr, AV_LOG_INFO, "\n");
 }
 
 void show_help_default(const char *opt, const char *arg)
@@ -429,8 +429,8 @@ int main(int argc, char **argv)
 
     if (!VideoState::input_filename) {
         show_usage();
-        av_log(NULL, AV_LOG_FATAL, "An input file must be specified\n");
-        av_log(NULL, AV_LOG_FATAL,
+        av_log(nullptr, AV_LOG_FATAL, "An input file must be specified\n");
+        av_log(nullptr, AV_LOG_FATAL,
                "Use -h to get full help or, even better, run 'man %s'\n",
                program_name);
         exit(1);
@@ -452,9 +452,9 @@ int main(int argc, char **argv)
     if (VideoState::display_disable)
         flags &= ~SDL_INIT_VIDEO;
     if (SDL_Init(flags)) {
-        av_log(NULL, AV_LOG_FATAL, "Could not initialize SDL - %s\n",
+        av_log(nullptr, AV_LOG_FATAL, "Could not initialize SDL - %s\n",
                SDL_GetError());
-        av_log(NULL, AV_LOG_FATAL, "(Did you set the DISPLAY variable?)\n");
+        av_log(nullptr, AV_LOG_FATAL, "(Did you set the DISPLAY variable?)\n");
         exit(1);
     }
 
@@ -478,7 +478,7 @@ int main(int argc, char **argv)
                 VideoState::window, -1,
                 SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (!VideoState::renderer) {
-                av_log(NULL, AV_LOG_WARNING,
+                av_log(nullptr, AV_LOG_WARNING,
                        "Failed to initialize a hardware accelerated renderer: "
                        "%s\n",
                        SDL_GetError());
@@ -488,13 +488,13 @@ int main(int argc, char **argv)
             if (VideoState::renderer) {
                 if (!SDL_GetRendererInfo(VideoState::renderer,
                                          &VideoState::renderer_info))
-                    av_log(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.\n",
+                    av_log(nullptr, AV_LOG_VERBOSE, "Initialized %s renderer.\n",
                            VideoState::renderer_info.name);
             }
         }
         if (!VideoState::window || !VideoState::renderer ||
             !VideoState::renderer_info.num_texture_formats) {
-            av_log(NULL, AV_LOG_FATAL,
+            av_log(nullptr, AV_LOG_FATAL,
                    "Failed to create window or renderer: %s", SDL_GetError());
             VideoState::do_exit();
         }
@@ -505,7 +505,7 @@ int main(int argc, char **argv)
     auto state =
         is.StreamOpen(VideoState::input_filename, file_iformat, av_sync_type);
     if (!state) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
+        av_log(nullptr, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         VideoState::do_exit();
     }
 
