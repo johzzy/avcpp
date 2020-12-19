@@ -93,12 +93,13 @@ struct AudioParams {
 struct SDL_Renderer;
 struct SDL_Texture;
 
-int realloc_texture(SDL_Texture **texture,
-                    Uint32 new_format,
-                    int new_width,
-                    int new_height,
-                    SDL_BlendMode blendmode,
-                    int init_texture);
+enum ShowMode {
+    SHOW_MODE_NONE = -1,
+    SHOW_MODE_VIDEO = 0,
+    SHOW_MODE_WAVES,
+    SHOW_MODE_RDFT,
+    SHOW_MODE_NB
+};
 
 struct VideoStateExtra {
     AVPacket flush_pkt;
@@ -108,6 +109,104 @@ struct VideoStateExtra {
         av_init_packet(&flush_pkt);
         flush_pkt.data = (uint8_t *)&flush_pkt;
     }
+    /* options specified by the user */
+    AVInputFormat *file_iformat { nullptr};
+    int av_sync_type = AV_SYNC_AUDIO_MASTER;
+
+    /* options specified by the user */
+    const char *input_filename { nullptr};
+    const char *window_title {nullptr};
+    int default_width = 640;
+    int default_height = 480;
+    int screen_width = 0;
+    int screen_height = 0;
+    int screen_left = SDL_WINDOWPOS_CENTERED;
+    int screen_top = SDL_WINDOWPOS_CENTERED;
+
+    double rdftspeed = 0.02;
+    int64_t cursor_last_shown {0LL};
+    int cursor_hidden = 0;
+
+    int autoexit{0};
+    int exit_on_keydown{0};
+    int exit_on_mousedown{0};
+    int loop = 1;
+    int framedrop = -1;
+    int infinite_buffer = -1;
+
+
+    //
+    const char **vfilters_list{ nullptr};
+    int nb_vfilters{0};
+    char *afilters {nullptr};
+
+    int autorotate = 1;
+    int find_stream_info = 1;
+    int filter_nbthreads = 0;
+
+    /* current context */
+    int is_full_screen{0};
+    int64_t audio_callback_time{0LL};
+
+    SDL_Window *window {nullptr};
+    int show_status = -1;
+    SDL_Renderer *renderer {nullptr};
+    SDL_RendererInfo renderer_info = { 0 };
+
+    ///////////
+
+    int audio_disable {0};
+    int video_disable {0};
+    int subtitle_disable {0};
+
+    const char *audio_codec_name{ nullptr};
+    const char *subtitle_codec_name{ nullptr};
+    const char *video_codec_name{ nullptr};
+
+    ////////////
+    unsigned sws_flags = SWS_BICUBIC;
+
+    ShowMode show_mode_ = ShowMode::SHOW_MODE_NONE;
+    ////////////
+
+    int64_t start_time = AV_NOPTS_VALUE;
+    int64_t duration = AV_NOPTS_VALUE;
+    int fast = 0;
+    int genpts = 0;
+    int lowres = 0;
+
+
+
+
+
+    ////////////
+    const char wanted_stream_spec[AVMEDIA_TYPE_NB] = { 0 };
+    int seek_by_bytes = -1;
+    float seek_interval = 10.f;
+
+    int display_disable {0};
+    int borderless {0};
+    int alwaysontop {0};
+
+    int startup_volume = 100;
+
+    /////////////////
+
+    void ToggleFullScreen();
+
+    void FillRectangle(int x, int y, int w, int h);
+    void set_default_window_size(int width, int height, AVRational sar);
+    void do_exit();
+
+    int upload_texture(SDL_Texture **tex,
+                              AVFrame *frame,
+                              struct SwsContext **img_convert_ctx);
+    int realloc_texture(SDL_Texture **texture,
+                        Uint32 new_format,
+                        int new_width,
+                        int new_height,
+                        SDL_BlendMode blendmode,
+                        int init_texture);
 };
 
 struct FourierContext {
@@ -186,15 +285,9 @@ struct VideoState {
     int frame_drops_early;
     int frame_drops_late;
 
-    enum ShowMode {
-        SHOW_MODE_NONE = -1,
-        SHOW_MODE_VIDEO = 0,
-        SHOW_MODE_WAVES,
-        SHOW_MODE_RDFT,
-        SHOW_MODE_NB
-    };
+
     ShowMode show_mode;
-    static ShowMode show_mode_;
+    // static ShowMode show_mode_;
 
     int last_i_start;
     FourierContext fourier;
@@ -229,17 +322,17 @@ struct VideoState {
     AVFilterContext *out_video_filter; // the last filter in the video chain
     AVFilterContext *in_audio_filter;  // the first filter in the audio chain
     AVFilterContext *out_audio_filter; // the last filter in the audio chain
-    AVFilterGraph *agraph;             // audio filter graph
+    AVFilterGraph *agraph{ nullptr};             // audio filter graph
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SDL_cond *continue_read_thread;
 
-    static SDL_Renderer *renderer;
-    static SDL_RendererInfo renderer_info;
-    static int64_t audio_callback_time;
+    // static SDL_Renderer *renderer;
+    // static SDL_RendererInfo renderer_info;
+    // static int64_t audio_callback_time;
 
-    static inline void FillRectangle(int x, int y, int w, int h);
+    // static inline void FillRectangle(int x, int y, int w, int h);
 
     void VideoImageDisplay();
     void VideoAudioDisplay();
@@ -247,17 +340,15 @@ struct VideoState {
     static void do_exit();
 
     void StreamClose();
-    bool StreamOpen(const char *filename,
-                    AVInputFormat *iformat,
-                    int av_sync_type);
+    bool StreamOpen();
 
     /* this thread gets the stream from the disk or the network */
     static int read_thread(void *arg);
 
-    static int genpts;
+    // static int genpts;
 
-    static int64_t start_time;
-    static int64_t duration;
+    // static int64_t start_time;
+    // static int64_t duration;
 
     static int decode_interrupt_cb(void *ctx)
     {
@@ -281,8 +372,6 @@ struct VideoState {
                   int wanted_sample_rate);
 
     void StreamCycleChannel(int codec_type);
-
-    void ToggleFullScreen();
 
     void toggle_audio_display();
 
@@ -355,10 +444,10 @@ struct VideoState {
 
     //////////
 
-    static unsigned sws_flags;
-    static int upload_texture(SDL_Texture **tex,
-                              AVFrame *frame,
-                              struct SwsContext **img_convert_ctx);
+    // static unsigned sws_flags;
+    // static int upload_texture(SDL_Texture **tex,
+    //                           AVFrame *frame,
+    //                           struct SwsContext **img_convert_ctx);
 
     /* prepare a new audio buffer */
     static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
@@ -369,62 +458,66 @@ struct VideoState {
 
     static int subtitle_thread(void *arg);
 
-    static void set_default_window_size(int width, int height, AVRational sar);
+    // void set_default_window_size(int width, int height, AVRational sar);
 
-    static SDL_Window *window;
-    static int show_status;
+    // static SDL_Window *window;
+    // static int show_status;
 
-    static const char **vfilters_list;
+    // static int nb_vfilters;
+    // static const char **vfilters_list;
+
     SDL_AudioDeviceID audio_dev;
-    static int lowres;
+    // static int lowres;
 
-    static const char *audio_codec_name;
-    static const char *subtitle_codec_name;
-    static const char *video_codec_name;
+    // static const char *audio_codec_name;
+    // static const char *subtitle_codec_name;
+    // static const char *video_codec_name;
 
-    static int fast;
+    // static int fast;
 
-    static char *afilters;
+    // static char *afilters;
 
-    static int autorotate;
-    static int find_stream_info;
-    static int filter_nbthreads;
+    // static int autorotate;
+    // static int find_stream_info;
+    // static int filter_nbthreads;
 
-    static int is_full_screen;
+    // static int is_full_screen;
 
     /* options specified by the user */
-    static const char *input_filename;
-    static const char *window_title;
-    static int default_width;
-    static int default_height;
-    static int screen_width;
-    static int screen_height;
-    static int screen_left;
-    static int screen_top;
+    // static const char *input_filename;
+    // static const char *window_title;
+    // static int default_width;
+    // static int default_height;
+    // static int screen_width;
+    // static int screen_height;
+    // static int screen_left;
+    // static int screen_top;
 
-    static double rdftspeed;
-    static int64_t cursor_last_shown;
-    static int cursor_hidden;
+    // static double rdftspeed;
+    // static int64_t cursor_last_shown;
+    // static int cursor_hidden;
 
-    static int autoexit;
-    static int exit_on_keydown;
-    static int exit_on_mousedown;
-    static int loop;
-    static int framedrop;
-    static int infinite_buffer;
+    // static int autoexit;
+    // static int exit_on_keydown;
+    // static int exit_on_mousedown;
+    // static int loop;
+    // static int framedrop;
+    // static int infinite_buffer;
 
-    static int nb_vfilters;
 
-    static int audio_disable;
-    static int video_disable;
-    static int subtitle_disable;
-    static const char *wanted_stream_spec[AVMEDIA_TYPE_NB];
-    static int seek_by_bytes;
-    static float seek_interval;
-    static int display_disable;
-    static int borderless;
-    static int alwaysontop;
-    static int startup_volume;
 
-    VideoStateExtra extra;
+    // static int audio_disable;
+    // static int video_disable;
+    // static int subtitle_disable;
+
+    // static const char *wanted_stream_spec[AVMEDIA_TYPE_NB];
+    // static int seek_by_bytes;
+    // static float seek_interval;
+    // static int display_disable;
+    // static int borderless;
+    // static int alwaysontop;
+    // static int startup_volume;
+
+    VideoStateExtra& extra;
+    VideoState(VideoStateExtra& e): extra(e) {}
 };
