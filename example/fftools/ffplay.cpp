@@ -73,71 +73,7 @@ const int program_birth_year = 2003;
 
 VideoStateExtra extra;
 
-// unsigned VideoState::sws_flags = SWS_BICUBIC;
-
-/* options specified by the user */
-// static AVInputFormat *file_iformat;
-
-// const char *VideoState::input_filename;
-// const char *VideoState::window_title;
-// int VideoState::default_width = 640;
-// int VideoState::default_height = 480;
-// int VideoState::screen_width = 0;
-// int VideoState::screen_height = 0;
-// int VideoState::screen_left = SDL_WINDOWPOS_CENTERED;
-// int VideoState::screen_top = SDL_WINDOWPOS_CENTERED;
-
-// int VideoState::audio_disable;
-// int VideoState::video_disable;
-// int VideoState::subtitle_disable;
-// const char *VideoState::wanted_stream_spec[AVMEDIA_TYPE_NB] = { 0 };
-// int VideoState::seek_by_bytes = -1;
-// float VideoState::seek_interval = 10;
-// int VideoState::display_disable;
-// int VideoState::borderless;
-// int VideoState::alwaysontop;
-// int VideoState::startup_volume = 100;
-
-// int VideoState::show_status = -1;
-// static int av_sync_type = AV_SYNC_AUDIO_MASTER;
-// int64_t VideoState::start_time = AV_NOPTS_VALUE;
-// int64_t VideoState::duration = AV_NOPTS_VALUE;
-// int VideoState::fast = 0;
-// int VideoState::genpts = 0;
-// int VideoState::lowres = 0;
 int Decoder::decoder_reorder_pts = -1;
-
-// int VideoState::autoexit;
-// int VideoState::exit_on_keydown;
-// int VideoState::exit_on_mousedown;
-// int VideoState::loop = 1;
-// int VideoState::framedrop = -1;
-// int VideoState::infinite_buffer = -1;
-
-// VideoState::ShowMode VideoState::show_mode_ = VideoState::SHOW_MODE_NONE;
-// const char *VideoState::audio_codec_name;
-// const char *VideoState::subtitle_codec_name;
-// const char *VideoState::video_codec_name;
-
-// double VideoState::rdftspeed = 0.02;
-// int64_t VideoState::cursor_last_shown;
-// int VideoState::cursor_hidden = 0;
-
-// const char **VideoState::vfilters_list = NULL;
-// int VideoState::nb_vfilters = 0;
-// char *VideoState::afilters = NULL;
-
-// int VideoState::autorotate = 1;
-// int VideoState::find_stream_info = 1;
-// int VideoState::filter_nbthreads = 0;
-
-/* current context */
-// int VideoState::is_full_screen;
-// int64_t VideoState::audio_callback_time;
-
-// SDL_Window *VideoState::window;
-// SDL_Renderer *VideoState::renderer;
-// SDL_RendererInfo VideoState::renderer_info = { 0 };
 
 struct OptionContext {
     void trace(const char *fn, int line, const char *file)
