@@ -251,8 +251,6 @@ int FrameQueue::NbRemaining() const
 int64_t FrameQueue::LastPosition() const
 {
     auto fp = &queue[rindex];
-    if (rindex_shown && fp->serial == pktq->serial)
-        return fp->pos;
-    else
-        return -1;
+    auto valid = rindex_shown && fp->serial == pktq->serial;
+    return valid ? fp->pos : -1;
 }

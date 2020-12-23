@@ -45,7 +45,6 @@ set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=example/*")
 
 find_package(spdlog)
 find_package(SDL2 REQUIRED)
-include_directories(${SDL2_INCLUDE_DIRS})
 
 add_definitions(-DFFMPEG_AMIX_MAIN)
 
@@ -106,6 +105,9 @@ foreach (target ${FFTOOL_TARGETS})
             ${FFTOOL_COMPAT}
             ${LIBSTDCXX}
             )
+
+    target_include_directories(${target} PRIVATE ${SDL2_INCLUDE_DIRS})
+
     target_link_libraries(${target}
             PRIVATE spdlog::spdlog_header_only
             avcpp::avcpp

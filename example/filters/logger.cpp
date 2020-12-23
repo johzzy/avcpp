@@ -40,4 +40,4 @@ void LogLoader::LoadLogger()
 }
 
 LogLoader loader;
-} // namespace bot
+} // namespace av

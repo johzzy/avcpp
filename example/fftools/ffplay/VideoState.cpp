@@ -81,13 +81,12 @@ static void get_sdl_pix_fmt_and_blendmode(int format,
                                           Uint32 *sdl_pix_fmt,
                                           SDL_BlendMode *sdl_blendmode)
 {
-    int i;
     *sdl_blendmode = SDL_BLENDMODE_NONE;
     *sdl_pix_fmt = SDL_PIXELFORMAT_UNKNOWN;
     if (format == AV_PIX_FMT_RGB32 || format == AV_PIX_FMT_RGB32_1 ||
         format == AV_PIX_FMT_BGR32 || format == AV_PIX_FMT_BGR32_1)
         *sdl_blendmode = SDL_BLENDMODE_BLEND;
-    for (i = 0; i < FF_ARRAY_ELEMS(sdl_texture_format_map) - 1; i++) {
+    for (int i = 0; i < FF_ARRAY_ELEMS(sdl_texture_format_map) - 1; i++) {
         if (format == sdl_texture_format_map[i].format) {
             *sdl_pix_fmt = sdl_texture_format_map[i].texture_fmt;
             return;
@@ -95,9 +94,9 @@ static void get_sdl_pix_fmt_and_blendmode(int format,
     }
 }
 
-static int stream_has_enough_packets(AVStream *st,
+static int stream_has_enough_packets(AVStream const* st,
                                      int stream_id,
-                                     PacketQueue *queue)
+                                     PacketQueue const* queue)
 {
     return stream_id < 0 || queue->abort_request ||
            (st->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
@@ -183,11 +182,10 @@ int VideoStateExtra::upload_texture(SDL_Texture **tex,
 
 void VideoState::VideoImageDisplay()
 {
-    Frame *vp;
     Frame *sp = NULL;
     SDL_Rect rect;
 
-    vp = pictq.PeekLast();
+    auto vp = pictq.PeekLast();
     if (subtitle_st) {
         if (subpq.NbRemaining() > 0) {
             sp = subpq.Peek();
@@ -300,9 +298,7 @@ void VideoState::VideoAudioDisplay()
     channels = audio_tgt.channels;
     nb_display_channels = channels;
     if (!paused) {
-        int data_used = show_mode == ShowMode::SHOW_MODE_WAVES
-                            ? this->width
-                            : (2 * nb_freq);
+        int data_used = show_mode == ShowMode::Waves ? width : (2 * nb_freq);
         n = 2 * channels;
         delay = audio_write_buf_size;
         delay /= n;
@@ -320,7 +316,7 @@ void VideoState::VideoAudioDisplay()
 
         i_start = x = compute_mod(fourier.sample_array_index - delay * channels,
                                   SAMPLE_ARRAY_SIZE);
-        if (this->show_mode == ShowMode::SHOW_MODE_WAVES) {
+        if (show_mode == ShowMode::Waves) {
             h = INT_MIN;
             for (i = 0; i < 1000; i += channels) {
                 int idx = (SAMPLE_ARRAY_SIZE + x - i) % SAMPLE_ARRAY_SIZE;
@@ -344,7 +340,7 @@ void VideoState::VideoAudioDisplay()
         i_start = this->last_i_start;
     }
 
-    if (this->show_mode == ShowMode::SHOW_MODE_WAVES) {
+    if (show_mode == ShowMode::Waves) {
         SDL_SetRenderDrawColor(extra.renderer, 255, 255, 255, 255);
 
         /* total height for one channel */
@@ -394,7 +390,7 @@ void VideoState::VideoAudioDisplay()
             av_log(NULL, AV_LOG_ERROR,
                    "Failed to allocate buffers for RDFT, switching to waves "
                    "display\n");
-            this->show_mode = ShowMode::SHOW_MODE_WAVES;
+            show_mode = ShowMode::Waves;
         } else {
             FFTSample *data[2];
             SDL_Rect rect = {
@@ -542,7 +538,7 @@ void VideoState::VideoDisplay()
 
     SDL_SetRenderDrawColor(extra.renderer, 0, 0, 0, 255);
     SDL_RenderClear(extra.renderer);
-    if (audio_st && show_mode != ShowMode::SHOW_MODE_VIDEO)
+    if (audio_st && show_mode != ShowMode::Video)
         VideoAudioDisplay();
     else if (video_st)
         VideoImageDisplay();
@@ -984,15 +980,15 @@ void VideoStateExtra::ToggleFullScreen()
 }
 void VideoState::toggle_audio_display()
 {
-    int next = this->show_mode;
+    auto next = show_mode;
     do {
-        next = (next + 1) % ShowMode::SHOW_MODE_NB;
-    } while (next != this->show_mode &&
-             (next == ShowMode::SHOW_MODE_VIDEO && !this->video_st ||
-              next != ShowMode::SHOW_MODE_VIDEO && !this->audio_st));
-    if (this->show_mode != next) {
-        this->force_refresh = 1;
-        this->show_mode = (ShowMode)next;
+        next = (ShowMode)(((int)next + 1) % (int)ShowMode::NB);
+    } while (next != show_mode &&
+             (next == ShowMode::Video && !video_st ||
+              next != ShowMode::Video && !audio_st));
+    if (show_mode != next) {
+        force_refresh = 1;
+        show_mode = (ShowMode)next;
     }
 }
 void VideoState::RefreshLoopWaitEvent(SDL_Event *event)
@@ -1009,7 +1005,7 @@ void VideoState::RefreshLoopWaitEvent(SDL_Event *event)
         if (remaining_time > 0.0)
             av_usleep((int64_t)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
-        if (this->show_mode != ShowMode::SHOW_MODE_NONE &&
+        if (this->show_mode != ShowMode::None &&
             (!this->paused || this->force_refresh))
             VideoRefresh(&remaining_time);
         SDL_PumpEvents();
@@ -1101,7 +1097,7 @@ void VideoState::EventLoop()
                 StreamCycleChannel(AVMEDIA_TYPE_SUBTITLE);
                 break;
             case SDLK_w:
-                if (show_mode == ShowMode::SHOW_MODE_VIDEO &&
+                if (show_mode == ShowMode::Video &&
                     vfilter_idx < extra.nb_vfilters - 1) {
                     if (++vfilter_idx >= extra.nb_vfilters)
                         vfilter_idx = 0;
@@ -1420,7 +1416,7 @@ void VideoState::VideoRefresh(double *remaining_time)
         this->realtime)
         this->CheckExternalClockSpeed();
 
-    if (!extra.display_disable && this->show_mode != ShowMode::SHOW_MODE_VIDEO &&
+    if (!extra.display_disable && this->show_mode != ShowMode::Video &&
         this->audio_st) {
         time = av_gettime_relative() / 1000000.0;
         if (this->force_refresh || this->last_vis_time + extra.rdftspeed < time) {
@@ -1538,7 +1534,7 @@ void VideoState::VideoRefresh(double *remaining_time)
     display:
         /* display picture */
         if (!extra.display_disable && this->force_refresh &&
-            this->show_mode == ShowMode::SHOW_MODE_VIDEO &&
+            this->show_mode == ShowMode::Video &&
             this->pictq.rindex_shown)
             this->VideoDisplay();
     }
@@ -2008,9 +2004,9 @@ int VideoState::AudioDecodeFrame()
 }
 void VideoState::UpdateSampleDisplay(short *samples, int samples_size)
 {
-    int size, len;
+    int len;
 
-    size = samples_size / sizeof(short);
+    int size = samples_size / sizeof(short);
     while (size > 0) {
         len = SAMPLE_ARRAY_SIZE - fourier.sample_array_index;
         if (len > size)
@@ -2092,7 +2088,7 @@ void VideoState::sdl_audio_callback(void *opaque, Uint8 *stream, int len)
                                      is->audio_tgt.frame_size *
                                      is->audio_tgt.frame_size;
             } else {
-                if (is->show_mode != ShowMode::SHOW_MODE_VIDEO)
+                if (is->show_mode != ShowMode::Video)
                     is->UpdateSampleDisplay((int16_t *)is->audio_buf,
                                             audio_size);
                 is->audio_buf_size = audio_size;
@@ -2512,7 +2508,7 @@ int VideoState::read_thread(void *arg)
     for (i = 0; i < AVMEDIA_TYPE_NB; i++) {
         if (is->extra.wanted_stream_spec[i] && st_index[i] == -1) {
             av_log(NULL, AV_LOG_ERROR,
-                   "Stream specifier %s does not match any %s stream\n",
+                   "Stream specifier %c does not match any %s stream\n",
                    is->extra.wanted_stream_spec[i],
                    av_get_media_type_string((AVMediaType)i));
             st_index[i] = INT_MAX;
@@ -2552,9 +2548,9 @@ int VideoState::read_thread(void *arg)
     if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
         ret = is->StreamComponentOpen(st_index[AVMEDIA_TYPE_VIDEO]);
     }
-    if (is->show_mode == ShowMode::SHOW_MODE_NONE)
+    if (is->show_mode == ShowMode::None)
         is->show_mode =
-            ret >= 0 ? ShowMode::SHOW_MODE_VIDEO : ShowMode::SHOW_MODE_RDFT;
+            ret >= 0 ? ShowMode::Video : ShowMode::RDFT;
 
     if (st_index[AVMEDIA_TYPE_SUBTITLE] >= 0) {
         is->StreamComponentOpen(st_index[AVMEDIA_TYPE_SUBTITLE]);

@@ -93,12 +93,12 @@ struct AudioParams {
 struct SDL_Renderer;
 struct SDL_Texture;
 
-enum ShowMode {
-    SHOW_MODE_NONE = -1,
-    SHOW_MODE_VIDEO = 0,
-    SHOW_MODE_WAVES,
-    SHOW_MODE_RDFT,
-    SHOW_MODE_NB
+enum class ShowMode: int {
+    None = -1,
+    Video = 0,
+    Waves,
+    RDFT,
+    NB
 };
 
 struct VideoStateExtra {
@@ -166,7 +166,7 @@ struct VideoStateExtra {
     ////////////
     unsigned sws_flags = SWS_BICUBIC;
 
-    ShowMode show_mode_ = ShowMode::SHOW_MODE_NONE;
+    ShowMode show_mode_ = ShowMode::None;
     ////////////
 
     int64_t start_time = AV_NOPTS_VALUE;

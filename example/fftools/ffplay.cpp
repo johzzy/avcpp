@@ -179,12 +179,12 @@ static int opt_show_mode(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
     extra.show_mode_ =
-        !strcmp(arg, "video")   ? ShowMode::SHOW_MODE_VIDEO
-        : !strcmp(arg, "waves") ? ShowMode::SHOW_MODE_WAVES
+        !strcmp(arg, "video")   ? ShowMode::Video
+        : !strcmp(arg, "waves") ? ShowMode::Waves
         : !strcmp(arg, "rdft")
-            ? ShowMode::SHOW_MODE_RDFT
+            ? ShowMode::RDFT
             : (ShowMode)parse_number_or_die(
-                  opt, arg, OPT_INT, 0, ShowMode::SHOW_MODE_NB - 1);
+                  opt, arg, OPT_INT, 0, (int)ShowMode::NB - 1);
     return 0;
 }
 

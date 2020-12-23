@@ -2132,6 +2132,8 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
         prefix  = 's';
         flags  |= AV_OPT_FLAG_SUBTITLE_PARAM;
         break;
+    default:
+        av_assert0(false);
     }
 
     while (t = av_dict_get(opts, "", t, AV_DICT_IGNORE_SUFFIX)) {
