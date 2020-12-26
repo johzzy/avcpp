@@ -25,29 +25,29 @@
 
 #include "config.h"
 #include <inttypes.h>
-#include <math.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdint.h>
 
 extern "C" {
-#include "libavutil/avstring.h"
-#include "libavutil/eval.h"
-#include "libavutil/mathematics.h"
-#include "libavutil/pixdesc.h"
-#include "libavutil/imgutils.h"
-#include "libavutil/dict.h"
-#include "libavutil/parseutils.h"
-#include "libavutil/samplefmt.h"
-#include "libavutil/avassert.h"
-#include "libavutil/time.h"
-#include "libavutil/bprint.h"
-#include "libavformat/avformat.h"
-#include "libavdevice/avdevice.h"
-#include "libswscale/swscale.h"
-#include "libavutil/opt.h"
 #include "libavcodec/avfft.h"
+#include "libavdevice/avdevice.h"
+#include "libavformat/avformat.h"
+#include "libavutil/avassert.h"
+#include "libavutil/avstring.h"
+#include "libavutil/bprint.h"
+#include "libavutil/dict.h"
+#include "libavutil/eval.h"
+#include "libavutil/imgutils.h"
+#include "libavutil/mathematics.h"
+#include "libavutil/opt.h"
+#include "libavutil/parseutils.h"
+#include "libavutil/pixdesc.h"
+#include "libavutil/samplefmt.h"
+#include "libavutil/time.h"
 #include "libswresample/swresample.h"
+#include "libswscale/swscale.h"
 
 #include "libavfilter/avfilter.h"
 #include "libavfilter/buffersink.h"
@@ -57,12 +57,12 @@ extern "C" {
 #include <SDL.h>
 #include <SDL_thread.h>
 
-#include <logger.h>
 #include <assert.h>
+#include <logger.h>
 
-#include "ffplay/FrameQueue.h"
 #include "ffplay/Clock.h"
 #include "ffplay/Decoder.h"
+#include "ffplay/FrameQueue.h"
 #include "ffplay/VideoState.h"
 #include "ffplay/common.h"
 
@@ -106,23 +106,22 @@ static void sigterm_handler(int sig)
 static int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    av_log(nullptr, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
+    av_log(nullptr, AV_LOG_WARNING,
+           "Option -s is deprecated, use -video_size.\n");
     return opt_default(NULL, "video_size", arg);
 }
 
 static int opt_width(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    extra.screen_width =
-        parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
+    extra.screen_width = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
 }
 
 static int opt_height(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    extra.screen_height =
-        parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
+    extra.screen_height = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
 }
 
@@ -178,13 +177,12 @@ static int opt_duration(void *optctx, const char *opt, const char *arg)
 static int opt_show_mode(void *optctx, const char *opt, const char *arg)
 {
     OptionContext::Trace(optctx, __FUNCTION__, __LINE__, __FILE__);
-    extra.show_mode_ =
-        !strcmp(arg, "video")   ? ShowMode::Video
-        : !strcmp(arg, "waves") ? ShowMode::Waves
-        : !strcmp(arg, "rdft")
-            ? ShowMode::RDFT
-            : (ShowMode)parse_number_or_die(
-                  opt, arg, OPT_INT, 0, (int)ShowMode::NB - 1);
+    extra.show_mode_ = !strcmp(arg, "video")   ? ShowMode::Video
+                       : !strcmp(arg, "waves") ? ShowMode::Waves
+                       : !strcmp(arg, "rdft")
+                           ? ShowMode::RDFT
+                           : (ShowMode)parse_number_or_die(
+                                 opt, arg, OPT_INT, 0, (int)ShowMode::NB - 1);
     return 0;
 }
 
@@ -293,7 +291,8 @@ static const OptionDef options[] = {
 static void show_usage(void)
 {
     av_log(nullptr, AV_LOG_INFO, "Simple media player\n");
-    av_log(nullptr, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
+    av_log(nullptr, AV_LOG_INFO, "usage: %s [options] input_file\n",
+           program_name);
     av_log(nullptr, AV_LOG_INFO, "\n");
 }
 
@@ -344,7 +343,6 @@ int main(int argc, char **argv)
     SPDLOG_INFO("AVSampleFormat size: {}", sizeof(AVSampleFormat));
     SPDLOG_INFO("BadEnum size: {}", sizeof(BadEnum));
     // assert(false);
-    int flags;
 
     init_dynload();
 
@@ -377,7 +375,7 @@ int main(int argc, char **argv)
     if (extra.display_disable) {
         extra.display_disable = 1;
     }
-    flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
+    int flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
     if (extra.audio_disable)
         flags &= ~SDL_INIT_AUDIO;
     else {
@@ -412,21 +410,20 @@ int main(int argc, char **argv)
             extra.default_width, extra.default_height, flags);
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
         if (extra.window) {
-            extra.renderer = SDL_CreateRenderer(
-                    extra.window, -1,
-                SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+            extra.renderer = SDL_CreateRenderer(extra.window, -1,
+                                                SDL_RENDERER_ACCELERATED |
+                                                    SDL_RENDERER_PRESENTVSYNC);
             if (!extra.renderer) {
                 av_log(nullptr, AV_LOG_WARNING,
                        "Failed to initialize a hardware accelerated renderer: "
                        "%s\n",
                        SDL_GetError());
-                extra.renderer =
-                    SDL_CreateRenderer(extra.window, -1, 0);
+                extra.renderer = SDL_CreateRenderer(extra.window, -1, 0);
             }
             if (extra.renderer) {
-                if (!SDL_GetRendererInfo(extra.renderer,
-                                         &extra.renderer_info))
-                    av_log(nullptr, AV_LOG_VERBOSE, "Initialized %s renderer.\n",
+                if (!SDL_GetRendererInfo(extra.renderer, &extra.renderer_info))
+                    av_log(nullptr, AV_LOG_VERBOSE,
+                           "Initialized %s renderer.\n",
                            extra.renderer_info.name);
             }
         }

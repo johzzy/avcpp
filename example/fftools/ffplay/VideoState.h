@@ -5,25 +5,25 @@
 #pragma once
 
 #include "Clock.h"
-#include "FrameQueue.h"
 #include "Decoder.h"
+#include "FrameQueue.h"
 
-#include <SDL2/SDL_blendmode.h>
-#include <SDL2/SDL_thread.h>
-#include <SDL2/SDL_events.h>
 #include <SDL.h>
+#include <SDL2/SDL_blendmode.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_thread.h>
 
 extern "C" {
-#include <libavutil/samplefmt.h> // for AVSampleFormat
-#include <libavformat/avformat.h>
 #include <libavcodec/avfft.h>
 #include <libavfilter/avfilter.h>
-#include <libswscale/swscale.h>
+#include <libavformat/avformat.h>
+#include <libavutil/samplefmt.h> // for AVSampleFormat
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 /* NOTE: the size must be big enough to compensate the hardware audio buffersize
@@ -93,29 +93,22 @@ struct AudioParams {
 struct SDL_Renderer;
 struct SDL_Texture;
 
-enum class ShowMode: int {
-    None = -1,
-    Video = 0,
-    Waves,
-    RDFT,
-    NB
-};
+enum class ShowMode : int { None = -1, Video = 0, Waves, RDFT, NB };
 
 struct VideoStateExtra {
     AVPacket flush_pkt;
 
-    VideoStateExtra()
-    {
+    VideoStateExtra() {
         av_init_packet(&flush_pkt);
-        flush_pkt.data = (uint8_t *)&flush_pkt;
+        flush_pkt.data = (uint8_t*)&flush_pkt;
     }
     /* options specified by the user */
-    AVInputFormat *file_iformat { nullptr};
+    AVInputFormat* file_iformat{ nullptr };
     int av_sync_type = AV_SYNC_AUDIO_MASTER;
 
     /* options specified by the user */
-    const char *input_filename { nullptr};
-    const char *window_title {nullptr};
+    const char* input_filename{ nullptr };
+    const char* window_title{ nullptr };
     int default_width = 640;
     int default_height = 480;
     int screen_width = 0;
@@ -124,44 +117,43 @@ struct VideoStateExtra {
     int screen_top = SDL_WINDOWPOS_CENTERED;
 
     double rdftspeed = 0.02;
-    int64_t cursor_last_shown {0LL};
+    int64_t cursor_last_shown{ 0LL };
     int cursor_hidden = 0;
 
-    int autoexit{0};
-    int exit_on_keydown{0};
-    int exit_on_mousedown{0};
+    int autoexit{ 0 };
+    int exit_on_keydown{ 0 };
+    int exit_on_mousedown{ 0 };
     int loop = 1;
     int framedrop = -1;
     int infinite_buffer = -1;
 
-
-    //
-    const char **vfilters_list{ nullptr};
-    int nb_vfilters{0};
-    char *afilters {nullptr};
+    ///////
+    const char** vfilters_list{ nullptr };
+    int nb_vfilters{ 0 };
+    char* afilters{ nullptr };
 
     int autorotate = 1;
     int find_stream_info = 1;
     int filter_nbthreads = 0;
 
     /* current context */
-    int is_full_screen{0};
-    int64_t audio_callback_time{0LL};
+    int is_full_screen{ 0 };
+    int64_t audio_callback_time{ 0LL };
 
-    SDL_Window *window {nullptr};
+    SDL_Window* window{ nullptr };
     int show_status = -1;
-    SDL_Renderer *renderer {nullptr};
+    SDL_Renderer* renderer{ nullptr };
     SDL_RendererInfo renderer_info = { 0 };
 
     ///////////
 
-    int audio_disable {0};
-    int video_disable {0};
-    int subtitle_disable {0};
+    int audio_disable{ 0 };
+    int video_disable{ 0 };
+    int subtitle_disable{ 0 };
 
-    const char *audio_codec_name{ nullptr};
-    const char *subtitle_codec_name{ nullptr};
-    const char *video_codec_name{ nullptr};
+    const char* audio_codec_name{ nullptr };
+    const char* subtitle_codec_name{ nullptr };
+    const char* video_codec_name{ nullptr };
 
     ////////////
     unsigned sws_flags = SWS_BICUBIC;
@@ -175,18 +167,14 @@ struct VideoStateExtra {
     int genpts = 0;
     int lowres = 0;
 
-
-
-
-
     ////////////
     const char wanted_stream_spec[AVMEDIA_TYPE_NB] = { 0 };
     int seek_by_bytes = -1;
     float seek_interval = 10.f;
 
-    int display_disable {0};
-    int borderless {0};
-    int alwaysontop {0};
+    int display_disable{ 0 };
+    int borderless{ 0 };
+    int alwaysontop{ 0 };
 
     int startup_volume = 100;
 
@@ -194,24 +182,23 @@ struct VideoStateExtra {
 
     void ToggleFullScreen();
 
-    void FillRectangle(int x, int y, int w, int h);
+    void RenderFillRect(int x, int y, int w, int h);
+    void RenderYdX(int x, int y1, int delta);
     void set_default_window_size(int width, int height, AVRational sar);
     void do_exit();
 
-    int upload_texture(SDL_Texture **tex,
-                              AVFrame *frame,
-                              struct SwsContext **img_convert_ctx);
-    int realloc_texture(SDL_Texture **texture,
-                        Uint32 new_format,
-                        int new_width,
-                        int new_height,
-                        SDL_BlendMode blendmode,
-                        int init_texture);
+    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+    int ReallocTexture(SDL_Texture** texture,
+                       Uint32 new_format,
+                       int new_width,
+                       int new_height,
+                       SDL_BlendMode blendmode,
+                       int init_texture);
 };
 
 struct FourierContext {
-    RDFTContext *rdft{ nullptr };
-    FFTSample *rdft_data{ nullptr };
+    RDFTContext* rdft{ nullptr };
+    FFTSample* rdft_data{ nullptr };
     int rdft_bits{ 0 };
 
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
@@ -228,8 +215,8 @@ struct FourierContext {
 };
 
 struct VideoState {
-    SDL_Thread *read_tid;
-    AVInputFormat *iformat;
+    SDL_Thread* read_tid;
+    AVInputFormat* iformat;
     int abort_request;
     int force_refresh;
     int paused;
@@ -240,7 +227,7 @@ struct VideoState {
     int64_t seek_pos;
     int64_t seek_rel;
     int read_pause_return;
-    AVFormatContext *ic;
+    AVFormatContext* ic;
     int realtime;
 
     Clock audclk;
@@ -265,11 +252,11 @@ struct VideoState {
     double audio_diff_avg_coef;
     double audio_diff_threshold;
     int audio_diff_avg_count;
-    AVStream *audio_st;
+    AVStream* audio_st;
     PacketQueue audioq;
     int audio_hw_buf_size;
-    uint8_t *audio_buf;
-    uint8_t *audio_buf1;
+    uint8_t* audio_buf;
+    uint8_t* audio_buf1;
     unsigned int audio_buf_size; /* in bytes */
     unsigned int audio_buf1_size;
     int audio_buf_index; /* in bytes */
@@ -281,7 +268,7 @@ struct VideoState {
     struct AudioParams audio_filter_src;
 
     struct AudioParams audio_tgt;
-    struct SwrContext *swr_ctx;
+    struct SwrContext* swr_ctx;
     int frame_drops_early;
     int frame_drops_late;
 
@@ -291,24 +278,24 @@ struct VideoState {
     FourierContext fourier;
     int xpos;
     double last_vis_time;
-    SDL_Texture *vis_texture;
-    SDL_Texture *sub_texture;
-    SDL_Texture *vid_texture;
+    SDL_Texture* vis_texture{ nullptr };
+    SDL_Texture* sub_texture{ nullptr };
+    SDL_Texture* vid_texture{ nullptr };
 
     int subtitle_stream;
-    AVStream *subtitle_st;
+    AVStream* subtitle_st;
     PacketQueue subtitleq;
 
     double frame_timer;
     double frame_last_returned_time;
     double frame_last_filter_delay;
     int video_stream;
-    AVStream *video_st;
+    AVStream* video_st;
     PacketQueue videoq;
     double max_frame_duration; // maximum duration of a frame - above this, we
                                // consider the jump a timestamp discontinuity
-    struct SwsContext *img_convert_ctx;
-    struct SwsContext *sub_convert_ctx;
+    struct SwsContext* img_convert_ctx{ nullptr };
+    struct SwsContext* sub_convert_ctx{ nullptr };
     int eof;
 
     std::string filename;
@@ -316,15 +303,15 @@ struct VideoState {
     int step;
 
     int vfilter_idx;
-    AVFilterContext *in_video_filter;  // the first filter in the video chain
-    AVFilterContext *out_video_filter; // the last filter in the video chain
-    AVFilterContext *in_audio_filter;  // the first filter in the audio chain
-    AVFilterContext *out_audio_filter; // the last filter in the audio chain
-    AVFilterGraph *agraph{ nullptr};             // audio filter graph
+    AVFilterContext* in_video_filter;  // the first filter in the video chain
+    AVFilterContext* out_video_filter; // the last filter in the video chain
+    AVFilterContext* in_audio_filter;  // the first filter in the audio chain
+    AVFilterContext* out_audio_filter; // the last filter in the audio chain
+    AVFilterGraph* agraph{ nullptr };  // audio filter graph
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
-    SDL_cond *continue_read_thread;
+    SDL_cond* continue_read_thread;
 
     void VideoImageDisplay();
     void VideoAudioDisplay();
@@ -335,11 +322,10 @@ struct VideoState {
     bool StreamOpen();
 
     /* this thread gets the stream from the disk or the network */
-    static int read_thread(void *arg);
+    static int ReadThread(void* arg);
 
-    static int decode_interrupt_cb(void *ctx)
-    {
-        auto is = (VideoState *)ctx;
+    static int decode_interrupt_cb(void* ctx) {
+        auto is = (VideoState*)ctx;
         assert(is);
         return is->abort_request;
     }
@@ -354,15 +340,13 @@ struct VideoState {
 
     int VideoOpen();
 
-    int AudioOpen(int64_t wanted_channel_layout,
-                  int wanted_nb_channels,
-                  int wanted_sample_rate);
+    int AudioOpen(int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate);
 
     void StreamCycleChannel(int codec_type);
 
-    void toggle_audio_display();
+    void ToggleAudioDisplay();
 
-    void RefreshLoopWaitEvent(SDL_Event *event);
+    void RefreshLoopWaitEvent(SDL_Event* event);
 
     void SeekChapter(int incr);
 
@@ -392,26 +376,20 @@ struct VideoState {
 
     double TargetDelay(double delay);
 
-    double vp_duration(Frame *vp, Frame *nextvp);
+    double vp_duration(Frame* vp, Frame* nextvp);
 
     void UpdateVideoPTS(double pts, int64_t pos, int serial);
 
     /* called to display each frame */
-    void VideoRefresh(double *remaining_time);
+    void VideoRefresh(double* remaining_time);
 
-    int queue_picture(AVFrame *src_frame,
-                      double pts,
-                      double duration,
-                      int64_t pos,
-                      int serial);
+    int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
 
-    int GetVideoFrame(AVFrame *frame);
+    int GetVideoFrame(AVFrame* frame);
 
-    int ConfigureVideoFilters(AVFilterGraph *graph,
-                              const char *vfilters,
-                              AVFrame *frame);
+    int ConfigureVideoFilters(AVFilterGraph* graph, const char* vfilters, AVFrame* frame);
 
-    int ConfigureAudioFilters(const char *afilters, int force_output_format);
+    int ConfigureAudioFilters(const char* afilters, int force_output_format);
 
     /**
      * Decode one audio frame and return its uncompressed size.
@@ -423,24 +401,25 @@ struct VideoState {
     int AudioDecodeFrame();
 
     /* copy samples for viewing in editor window */
-    void UpdateSampleDisplay(short *samples, int samples_size);
+    void UpdateSampleDisplay(short* samples, int samples_size);
 
     /* return the wanted number of samples to get better sync if sync_type is
      * video or external master clock */
     int SynchronizeAudio(int nb_samples);
 
-
     /* prepare a new audio buffer */
-    static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
+    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);
 
-    static int audio_thread(void *arg);
+    static int audio_thread(void* arg);
 
-    static int video_thread(void *arg);
+    static int video_thread(void* arg);
 
-    static int subtitle_thread(void *arg);
+    static int subtitle_thread(void* arg);
 
-    SDL_AudioDeviceID audio_dev;
+    SDL_AudioDeviceID audio_device_id{ 0 };
 
     VideoStateExtra& extra;
-    VideoState(VideoStateExtra& e): extra(e) {}
+    VideoState(VideoStateExtra& e) : extra(e) {}
+    void DrawWaves(int i_start, int nb_display_channels, int channels);
+    void DrawRDFT(int i_start, int nb_display_channels, int channels, int rdft_bits, int nb_freq);
 };

@@ -3,10 +3,6 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavutil/channel_layout.h>
-#include <libavutil/md5.h>
-#include <libavutil/opt.h>
-#include <libavutil/samplefmt.h>
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
@@ -15,20 +11,23 @@ extern "C" {
 #include <libavutil/audio_fifo.h>
 #include <libavutil/avassert.h>
 #include <libavutil/avstring.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/frame.h>
+#include <libavutil/md5.h>
+#include <libavutil/opt.h>
+#include <libavutil/samplefmt.h>
 }
 
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
 #include <vector>
 
-int MediaOutputContext::Open()
-{
+int MediaOutputContext::Open() {
     assert(option.filename);
     remove(option.filename);
-    AVIOContext *output_io_context = nullptr;
-    AVStream *stream = nullptr;
-    AVCodec *output_codec = nullptr;
+    AVIOContext* output_io_context = nullptr;
+    AVStream* stream = nullptr;
+    AVCodec* output_codec = nullptr;
 
     int error = avio_open(&output_io_context, option.filename, AVIO_FLAG_WRITE);
 
@@ -152,26 +151,22 @@ cleanup:
     format_context = nullptr;
     return error < 0 ? error : AVERROR_EXIT;
 }
-MediaOutputContext::~MediaOutputContext()
-{
+MediaOutputContext::~MediaOutputContext() {
     if (fifo) {
         av_audio_fifo_free(fifo);
         fifo = nullptr;
     }
 }
 
-int MediaOutputContext::WriteFrame(AVPacket &packet)
-{
+int MediaOutputContext::WriteFrame(AVPacket& packet) {
     return av_write_frame(format_context, &packet);
 }
-int MediaOutputContext::WriteHeader()
-{
+int MediaOutputContext::WriteHeader() {
     assert(format_context);
     av_dump_format(format_context, 0, option.filename, 1);
     return write_output_file_header(format_context);
 }
-int MediaOutputContext::WriteTrailer()
-{
+int MediaOutputContext::WriteTrailer() {
     assert(option.filename);
     int error = av_write_trailer(format_context);
     if (error < 0) {
@@ -182,8 +177,7 @@ int MediaOutputContext::WriteTrailer()
     return error;
 }
 
-int InputContext::create_filter(AVFilterGraph *&filter_graph)
-{
+int InputContext::create_filter(AVFilterGraph*& filter_graph) {
     /* Create the abuffer filter;
      * it will be used for feeding the data into the graph. */
     auto abuffer = avfilter_get_by_name("abuffer");
@@ -217,8 +211,7 @@ int InputContext::create_filter(AVFilterGraph *&filter_graph)
     return err;
 }
 
-int InputContext::create_filter2(AVFilterGraph *&filter_graph)
-{
+int InputContext::create_filter2(AVFilterGraph*& filter_graph) {
     /* Create the abuffer filter;
      * it will be used for feeding the data into the graph. */
     auto abuffer = avfilter_get_by_name("abuffer");
@@ -254,8 +247,7 @@ int InputContext::create_filter2(AVFilterGraph *&filter_graph)
     return err;
 }
 
-int InputContext::DecodingAudio()
-{
+int InputContext::DecodingAudio() {
     /** Packet used for temporary storage. */
     AVPacket packet{ 0 };
     av_init_packet(&packet);
@@ -329,15 +321,13 @@ int InputContext::DecodingAudio()
 
     return ret;
 }
-OutputContext::~OutputContext()
-{
+OutputContext::~OutputContext() {
     if (sink) {
         avfilter_free(sink);
         sink = nullptr;
     }
 }
-int OutputContext::EncodingAudio(const AVFrame *frame)
-{
+int OutputContext::EncodingAudio(const AVFrame* frame) {
     /**
      * Encode the audio frame and store it in the temporary packet.
      * The output audio stream encoder is used to do this.
@@ -387,10 +377,9 @@ int OutputContext::EncodingAudio(const AVFrame *frame)
     return 0;
 }
 
-AVFrame *FIFOOutputContext::InitOutputFrame(
-    AVCodecContext *output_codec_context,
-    int frame_size)
-{
+AVFrame* FIFOOutputContext::InitOutputFrame(
+    AVCodecContext* output_codec_context,
+    int frame_size) {
     assert(frame_size > 0);
     auto frame = av_frame_alloc();
     /* Create a new frame to store the audio samples. */
@@ -424,8 +413,7 @@ AVFrame *FIFOOutputContext::InitOutputFrame(
     return frame;
 }
 int OutputContext::write_output_file_header(
-    AVFormatContext *output_format_context)
-{
+    AVFormatContext* output_format_context) {
     int error;
     if ((error = avformat_write_header(output_format_context, NULL)) < 0) {
         av_log(NULL, AV_LOG_ERROR,
@@ -435,8 +423,7 @@ int OutputContext::write_output_file_header(
     }
     return error;
 }
-int OutputContext::create_filter(InputContextArray &inputs_)
-{
+int OutputContext::create_filter(InputContextArray& inputs_) {
     /* Create mix filter. */
     auto mix_filter = avfilter_get_by_name("amix");
     if (!mix_filter) {
@@ -446,7 +433,7 @@ int OutputContext::create_filter(InputContextArray &inputs_)
 
     char args[512];
     snprintf(args, sizeof(args), "inputs=%lu", inputs_.size());
-    AVFilterContext *mix_ctx{ nullptr };
+    AVFilterContext* mix_ctx{ nullptr };
     auto err = avfilter_graph_create_filter(&mix_ctx, mix_filter, option.name,
                                             args, nullptr, graph);
 
@@ -490,11 +477,10 @@ int OutputContext::create_filter(InputContextArray &inputs_)
     assert(option.channels == codec_context->channels);
     auto channel_layout = av_get_default_channel_layout(option.channels);
     // channel_layout = AV_CH_LAYOUT_5POINT0;
-    av_get_channel_layout_string((char *)ch_layout, sizeof(ch_layout), 0,
+    av_get_channel_layout_string((char*)ch_layout, sizeof(ch_layout), 0,
                                  channel_layout);
-    av_log(NULL, AV_LOG_INFO, "channel_layout: '%s'\n",
-           (const char *)ch_layout);
-    auto ret = av_opt_set(sink, "channel_layout", (const char *)ch_layout,
+    av_log(NULL, AV_LOG_INFO, "channel_layout: '%s'\n", (const char*)ch_layout);
+    auto ret = av_opt_set(sink, "channel_layout", (const char*)ch_layout,
                           AV_OPT_SEARCH_CHILDREN);
     // auto ret = av_opt_set_channel_layout(
     //     sink, "out_channel_layout", channel_layout, AV_OPT_SEARCH_CHILDREN);
@@ -515,14 +501,14 @@ int OutputContext::create_filter(InputContextArray &inputs_)
     }
 
     /* Connect the filters; */
-    for (auto &input_ : inputs_) {
+    for (auto& input_ : inputs_) {
         if (input_->volume >= 0) {
             auto volume = avfilter_get_by_name("volume");
             assert(volume);
             auto volume_ctx =
                 avfilter_graph_alloc_filter(graph, volume, "volume");
             assert(volume_ctx);
-            AVDictionary *options_dict{ nullptr };
+            AVDictionary* options_dict{ nullptr };
             av_dict_set_int(&options_dict, "volume", input_->volume, 0);
             err = avfilter_init_dict(volume_ctx, &options_dict);
             assert(err >= 0);
@@ -583,11 +569,10 @@ int OutputContext::create_filter(InputContextArray &inputs_)
 static int64_t pts = 0;
 
 int MediaOutputContextOrigin::encode_audio_frame(
-    AVFrame *frame,
-    AVFormatContext *output_format_context,
-    AVCodecContext *output_codec_context,
-    int *data_present)
-{
+    AVFrame* frame,
+    AVFormatContext* output_format_context,
+    AVCodecContext* output_codec_context,
+    int* data_present) {
     /* Packet used for temporary storage. */
     AVPacket output_packet{ 0 };
     av_init_packet(&output_packet);
@@ -645,18 +630,16 @@ cleanup:
     av_packet_unref(&output_packet);
     return error;
 }
-MediaOutputContextOrigin::~MediaOutputContextOrigin()
-{
+MediaOutputContextOrigin::~MediaOutputContextOrigin() {
     if (fifo) {
         av_audio_fifo_free(fifo);
         fifo = nullptr;
     }
 }
 int MediaOutputContextOrigin::load_encode_and_write(
-    AVAudioFifo *fifo,
-    AVFormatContext *output_format_context,
-    AVCodecContext *output_codec_context)
-{
+    AVAudioFifo* fifo,
+    AVFormatContext* output_format_context,
+    AVCodecContext* output_codec_context) {
     /* Use the maximum number of possible samples per frame.
      * If there is less than the maximum possible frame size in the FIFO
      * buffer use this number. Otherwise, use the maximum possible frame
@@ -679,7 +662,7 @@ int MediaOutputContextOrigin::load_encode_and_write(
 
     /* Read as many samples from the FIFO buffer as required to fill the
      * frame. The samples are stored in the frame temporarily. */
-    if (av_audio_fifo_read(fifo, (void **)output_frame->data, frame_size) <
+    if (av_audio_fifo_read(fifo, (void**)output_frame->data, frame_size) <
         frame_size) {
         av_log(NULL, AV_LOG_ERROR, "Could not read data from FIFO\n");
         av_frame_free(&output_frame);
@@ -696,13 +679,12 @@ int MediaOutputContextOrigin::load_encode_and_write(
     return 0;
 }
 
-int MediaOutputContextOrigin::Open()
-{
+int MediaOutputContextOrigin::Open() {
     assert(option.filename);
     remove(option.filename);
-    AVIOContext *output_io_context = nullptr;
-    AVStream *stream = nullptr;
-    AVCodec *output_codec = nullptr;
+    AVIOContext* output_io_context = nullptr;
+    AVStream* stream = nullptr;
+    AVCodec* output_codec = nullptr;
 
     int error = avio_open(&output_io_context, option.filename, AVIO_FLAG_WRITE);
 
@@ -827,18 +809,15 @@ cleanup:
     return error < 0 ? error : AVERROR_EXIT;
 }
 
-int MediaOutputContextOrigin::WriteFrame(AVPacket &packet)
-{
+int MediaOutputContextOrigin::WriteFrame(AVPacket& packet) {
     return av_write_frame(format_context, &packet);
 }
-int MediaOutputContextOrigin::WriteHeader()
-{
+int MediaOutputContextOrigin::WriteHeader() {
     assert(format_context);
     av_dump_format(format_context, 0, option.filename, 1);
     return write_output_file_header(format_context);
 }
-int MediaOutputContextOrigin::WriteTrailer()
-{
+int MediaOutputContextOrigin::WriteTrailer() {
     assert(option.filename);
     int error = av_write_trailer(format_context);
     if (error < 0) {
@@ -849,8 +828,7 @@ int MediaOutputContextOrigin::WriteTrailer()
     return error;
 }
 
-int FIFOOutputContext::TransferOut(int frame_size)
-{
+int FIFOOutputContext::TransferOut(int frame_size) {
     /* Temporary storage of the output samples of the frame written to the
      * file.
      */
@@ -864,7 +842,7 @@ int FIFOOutputContext::TransferOut(int frame_size)
 
     /* Read as many samples from the FIFO buffer as required to fill the
      * frame. The samples are stored in the frame temporarily. */
-    if (av_audio_fifo_read(fifo, (void **)frame->data, frame_size) <
+    if (av_audio_fifo_read(fifo, (void**)frame->data, frame_size) <
         frame_size) {
         av_log(NULL, AV_LOG_ERROR, "Could not read data from FIFO\n");
         av_frame_free(&frame);
@@ -880,31 +858,28 @@ int FIFOOutputContext::TransferOut(int frame_size)
     return 0;
 }
 
-int FIFOOutputContext::TransferIn(AVAudioFifo *fifo,
-                                        uint8_t **samples,
-                                        const int size)
-{
+int FIFOOutputContext::TransferIn(AVAudioFifo* fifo,
+                                  uint8_t** samples,
+                                  const int size) {
     /* Make the FIFO as large as it needs to be to hold both,
      * the old and the new samples. */
-    auto error =
-        av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + size);
+    auto error = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + size);
     if (error < 0) {
         av_log(NULL, AV_LOG_ERROR, "Could not reallocate FIFO\n");
         return error;
     }
 
     /* Store the new samples in the FIFO buffer. */
-    if (av_audio_fifo_write(fifo, (void **)samples, size) < size) {
+    if (av_audio_fifo_write(fifo, (void**)samples, size) < size) {
         av_log(NULL, AV_LOG_ERROR, "Could not write data to FIFO\n");
         return AVERROR_EXIT;
     }
     return 0;
 }
 
-int FIFOOutputContext::EncodingAudio(const AVFrame *frame)
-{
+int FIFOOutputContext::EncodingAudio(const AVFrame* frame) {
     assert(fifo);
-    TransferIn(fifo, (uint8_t **)frame->data, frame->nb_samples);
+    TransferIn(fifo, (uint8_t**)frame->data, frame->nb_samples);
     int size = codec_context->frame_size;
     if (size == 0) {
         size = frame->linesize[0];
@@ -929,15 +904,13 @@ int FIFOOutputContext::EncodingAudio(const AVFrame *frame)
     return 0;
 }
 
-FIFOOutputContext::~FIFOOutputContext()
-{
+FIFOOutputContext::~FIFOOutputContext() {
     if (fifo) {
         av_audio_fifo_free(fifo);
         fifo = nullptr;
     }
 }
-int MediaInputContext::ReadFrame(AVPacket &packet)
-{
+int MediaInputContext::ReadFrame(AVPacket& packet) {
     auto ret = av_read_frame(format_context, &packet);
     if (packet.stream_index != audio_index_ && ret == 0) {
         av_packet_unref(&packet);
@@ -945,12 +918,11 @@ int MediaInputContext::ReadFrame(AVPacket &packet)
     }
     return ret;
 }
-int MediaInputContext::Open()
-{
-    AVCodec *input_codec;
+int MediaInputContext::Open() {
+    AVCodec* input_codec;
     int error;
 
-    AVDictionary *options = nullptr;
+    AVDictionary* options = nullptr;
     error = av_dict_set(&options, "protocol_whitelist", "file,udp,rtp", 0);
     assert(error >= 0);
     // av_dict_set(&options, "flags", "+global_header", 0);
@@ -1017,8 +989,7 @@ int MediaInputContext::Open()
     assert(codec_context->sample_rate > 0);
     return error;
 }
-int MediaInputContextOrigin::ReadFrame(AVPacket &packet)
-{
+int MediaInputContextOrigin::ReadFrame(AVPacket& packet) {
     auto ret = av_read_frame(format_context, &packet);
     if (packet.stream_index != audio_index_ && ret == 0) {
         av_packet_unref(&packet);
@@ -1026,9 +997,8 @@ int MediaInputContextOrigin::ReadFrame(AVPacket &packet)
     }
     return ret;
 }
-int MediaInputContextOrigin::Open()
-{
-    AVCodec *input_codec;
+int MediaInputContextOrigin::Open() {
+    AVCodec* input_codec;
     int error;
 
     /** Open the input file to read from it. */
@@ -1090,8 +1060,7 @@ int MediaInputContextOrigin::Open()
     assert(codec_context->sample_rate > 0);
     return error;
 }
-int RTPInputContext::Open()
-{
+int RTPInputContext::Open() {
     assert(!codec_context);
     auto decoder = avcodec_find_decoder(codec_option_.codec_id);
     if (!decoder) {
@@ -1135,8 +1104,7 @@ int RTPInputContext::Open()
 
     return 0;
 }
-int RTPInputContext::ReadFrame(AVPacket &packet)
-{
+int RTPInputContext::ReadFrame(AVPacket& packet) {
     auto buffer = reader.ReadPacket();
     if (buffer.empty()) {
         if (reader.f.eof()) {
@@ -1160,8 +1128,7 @@ int RTPInputContext::ReadFrame(AVPacket &packet)
 
     return 0;
 }
-int RTPOutputContext::Open()
-{
+int RTPOutputContext::Open() {
     assert(!codec_context);
     /** Find the encoder to be used by its name. */
     auto encoder = avcodec_find_encoder(option.codec_id);
@@ -1224,27 +1191,23 @@ int RTPOutputContext::Open()
     }
     return 0;
 }
-int RTPOutputContext::WriteFrame(AVPacket &packet)
-{
+int RTPOutputContext::WriteFrame(AVPacket& packet) {
     writer.WritePacket(packet.data, packet.size);
     // todo: output mixed frame
     // SPDLOG_INFO("{} {}", ++packet_index, packet.size);
     return 0;
 }
-int RTPOutputContext::WriteTrailer()
-{
+int RTPOutputContext::WriteTrailer() {
     writer.Close();
     return 0;
 }
-int RTPOutputContext::WriteHeader()
-{
+int RTPOutputContext::WriteHeader() {
     writer.Open(option.filename);
     return 0;
 }
 
-int Process(AMixContext &context)
-{
-    for (auto &input_ : context.inputs_) {
+int Process(AMixContext& context) {
+    for (auto& input_ : context.inputs_) {
         if (input_->Open() < 0) {
             av_log(NULL, AV_LOG_ERROR, "Error while opening file 1\n");
             exit(1);
@@ -1262,7 +1225,8 @@ int Process(AMixContext &context)
     /* Set up the filtergraph. */
     err = context.InitFilterGraph();
     if (err < 0) {
-        av_log(NULL, AV_LOG_ERROR, "InitFilterGraph err=%d(%s)\n", err, av_err2str(err));
+        av_log(NULL, AV_LOG_ERROR, "InitFilterGraph err=%d(%s)\n", err,
+               av_err2str(err));
     }
     assert(err >= 0);
 
@@ -1282,6 +1246,58 @@ int Process(AMixContext &context)
     av_log(NULL, AV_LOG_INFO, "FINISHED\n");
     return 0;
 }
+
+namespace go {
+using std::string;
+namespace time {
+using Duration = int64_t;
+constexpr auto Second = 1LL;
+} // namespace time
+namespace tls {
+using Config = string;
+}
+
+struct Server {
+    string addr;
+    int port;
+    string protocol;
+    time::Duration timeout;
+    int max_conns;
+    tls::Config* tls_;
+};
+
+using Option = std::function<void(Server& s)>;
+
+auto Protocol(string p) -> Option {
+    return [p](Server& s) { s.protocol = p; };
+}
+auto Timeout(time::Duration timeout) -> Option {
+    return [timeout](Server& s) { s.timeout = timeout; };
+}
+auto MaxConns(int max_conns) -> Option {
+    return [max_conns](Server& s) { s.max_conns = max_conns; };
+}
+auto TLS(tls::Config* tls_) -> Option {
+    return [tls_](Server& s) { s.tls_ = tls_; };
+}
+
+Server NewServer(string addr,
+                 int port,
+                 std::initializer_list<Option> options = {}) {
+    Server s{ addr, port, "tcp", 30 * time::Second, 1000, nullptr };
+    for (auto& option : options) {
+        option(s);
+    }
+    return s;
+}
+
+void UsageServer() {
+    auto s1 = NewServer("localhost", 1024);
+    auto s2 = NewServer("localhost", 2048, { Protocol("udp") });
+    auto s3 = NewServer("0.0.0.0", 8080,
+                        { Timeout(300 * time::Second), MaxConns(1000) });
+}
+} // namespace go
 
 #if defined(FFMPEG_AMIX_MAIN)
 int main()
@@ -1305,4 +1321,5 @@ int ffmpeg_amix_main()
         context.Opus2Opus();
         Process(context);
     }
+    return 0;
 }
