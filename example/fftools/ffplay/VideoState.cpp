@@ -9,6 +9,7 @@
 
 #include <SDL.h>
 #include <SDL_thread.h>
+#include <vector>
 
 extern "C" {
 #include <libavfilter/buffersink.h>
@@ -211,7 +212,7 @@ void VideoState::VideoImageDisplay() {
     set_sdl_yuv_conversion_mode(NULL);
     if (sp) {
 #if USE_ONEPASS_SUBTITLE_RENDER
-        SDL_RenderCopy(renderer, sub_texture, NULL, &rect);
+        SDL_RenderCopy(extra.renderer, sub_texture, NULL, &rect);
 #else
         int i;
         double xratio = (double)rect.w / (double)sp->width;
@@ -299,56 +300,13 @@ void VideoStateExtra::RenderFillRect(int x, int y, int w, int h) {
 }
 
 void VideoState::VideoAudioDisplay() {
-    int i_start, x, delay, n;
-    int h;
-    int64_t time_diff;
-    int rdft_bits, nb_freq;
-
-    for (rdft_bits = 1; (1 << rdft_bits) < 2 * height; rdft_bits++)
-        ;
-    nb_freq = 1 << (rdft_bits - 1);
+    int rdft_bits = log2(height) + 2;
+    int nb_freq = 1 << (rdft_bits - 1);
 
     /* compute display index : center on currently output samples */
     int channels = audio_tgt.channels;
     int nb_display_channels = channels;
-    if (!paused) {
-        int data_used = show_mode == ShowMode::Waves ? width : (2 * nb_freq);
-        n = 2 * channels;
-        delay = audio_write_buf_size;
-        delay /= n;
-
-        /* to be more precise, we take into account the time spent since
-           the last buffer computation */
-        if (extra.audio_callback_time) {
-            time_diff = av_gettime_relative() - extra.audio_callback_time;
-            delay -= (time_diff * this->audio_tgt.freq) / 1000000;
-        }
-
-        delay += 2 * data_used;
-        if (delay < data_used)
-            delay = data_used;
-
-        i_start = x = compute_mod(fourier.sample_array_index - delay * channels, SAMPLE_ARRAY_SIZE);
-        if (show_mode == ShowMode::Waves) {
-            h = INT_MIN;
-            for (int i = 0; i < 1000; i += channels) {
-                int idx = (SAMPLE_ARRAY_SIZE + x - i) % SAMPLE_ARRAY_SIZE;
-                int a = fourier.sample_array[idx];
-                int b = fourier.sample_array[(idx + 4 * channels) % SAMPLE_ARRAY_SIZE];
-                int c = fourier.sample_array[(idx + 5 * channels) % SAMPLE_ARRAY_SIZE];
-                int d = fourier.sample_array[(idx + 9 * channels) % SAMPLE_ARRAY_SIZE];
-                int score = a - d;
-                if (h < score && (b ^ c) < 0) {
-                    h = score;
-                    i_start = idx;
-                }
-            }
-        }
-
-        this->last_i_start = i_start;
-    } else {
-        i_start = this->last_i_start;
-    }
+    int i_start = paused ? last_i_start : UpdateAudioDisplay(nb_freq, channels);
 
     if (show_mode == ShowMode::Waves) {
         HackDrawWaves(i_start, nb_display_channels, channels);
@@ -361,13 +319,13 @@ void VideoState::DrawRDFT(int i_start, int nb_display_channels, int channels, in
     if (extra.ReallocTexture(&vis_texture, SDL_PIXELFORMAT_ARGB8888, width, height, SDL_BLENDMODE_NONE, 1) < 0)
         return;
 
-    nb_display_channels = std::min(nb_display_channels, 2);
+    // nb_display_channels = std::min(nb_display_channels, 2);
     if (rdft_bits != fourier.rdft_bits) {
         av_rdft_end(fourier.rdft);
         av_free(fourier.rdft_data);
         fourier.rdft = av_rdft_init(rdft_bits, DFT_R2C);
         fourier.rdft_bits = rdft_bits;
-        fourier.rdft_data = (FFTSample*)av_malloc_array(nb_freq, 4 * sizeof(*fourier.rdft_data));
+        fourier.rdft_data = (FFTSample*)av_malloc_array(nb_freq, 2 * nb_display_channels * sizeof(*fourier.rdft_data));
     }
     if (!fourier.rdft || !fourier.rdft_data) {
         av_log(NULL, AV_LOG_ERROR,
@@ -375,7 +333,7 @@ void VideoState::DrawRDFT(int i_start, int nb_display_channels, int channels, in
                "display\n");
         show_mode = ShowMode::Waves;
     } else {
-        FFTSample* data[2];
+        std::vector<FFTSample*> data(nb_display_channels, nullptr);
         SDL_Rect rect = { .x = xpos, .y = 0, .w = 1, .h = height };
         uint32_t* pixels;
         int pitch;
@@ -398,13 +356,24 @@ void VideoState::DrawRDFT(int i_start, int nb_display_channels, int channels, in
             pixels += pitch * height;
             for (int y = 0; y < height; y++) {
                 double w = 1 / sqrt(nb_freq);
-                int a =
-                    sqrt(w * sqrt(data[0][2 * y + 0] * data[0][2 * y + 0] + data[0][2 * y + 1] * data[0][2 * y + 1]));
-                int b = (nb_display_channels == 2) ? sqrt(w * hypot(data[1][2 * y + 0], data[1][2 * y + 1])) : a;
-                a = std::min(a, 255);
-                b = std::min(b, 255);
                 pixels -= pitch;
-                *pixels = (a << 16) + (b << 8) + ((a + b) >> 1);
+                std::vector<int> aa(nb_display_channels, 0);
+                for (int i=0; i<nb_display_channels; ++i) {
+                    aa[i] = sqrt(w * hypot(data[i][2 * y + 0], data[i][2 * y + 1]));
+                }
+                assert(nb_display_channels > 0);
+                if (nb_display_channels == 1) {
+                    aa.push_back(aa[0]);
+                }
+                int sum = 0;
+                *pixels = 0;
+                int size = std::min(nb_display_channels, 2);
+                for (int i=0; i<size; ++i) {
+                    aa[i] = std::min(aa[i], 255);
+                    sum += aa[i];
+                    *pixels += aa[i] << (8*(size-i));
+                }
+                *pixels += sum / size;
             }
             SDL_UnlockTexture(vis_texture);
         }
@@ -2478,3 +2447,43 @@ void VideoState::HackDrawWaves(int i_start, int nb_display_channels, int channel
         extra.RenderFillRect(xleft, y, width, 1);
     }
 }
+
+int VideoState::UpdateAudioDisplay(int nb_freq, int channels) {
+    int data_used = show_mode == ShowMode::Waves ? width : (2 * nb_freq);
+    int n = 2 * channels;
+    int delay = audio_write_buf_size;
+    delay /= n;
+
+    /* to be more precise, we take into account the time spent since
+   the last buffer computation */
+    if (extra.audio_callback_time) {
+        auto time_diff = av_gettime_relative() - extra.audio_callback_time;
+        delay -= (time_diff * audio_tgt.freq) / 1000000;
+    }
+
+    delay += 2 * data_used;
+    if (delay < data_used)
+        delay = data_used;
+
+    int i_start = compute_mod(fourier.sample_array_index - delay * channels, SAMPLE_ARRAY_SIZE);
+    int x = i_start;
+    if (show_mode == ShowMode::Waves) {
+        int h = INT_MIN;
+        for (int i = 0; i < 1000; i += channels) {
+            int idx = (SAMPLE_ARRAY_SIZE + x - i) % SAMPLE_ARRAY_SIZE;
+            int a = fourier.sample_array[idx];
+            int b = fourier.sample_array[(idx + 4 * channels) % SAMPLE_ARRAY_SIZE];
+            int c = fourier.sample_array[(idx + 5 * channels) % SAMPLE_ARRAY_SIZE];
+            int d = fourier.sample_array[(idx + 9 * channels) % SAMPLE_ARRAY_SIZE];
+            int score = a - d;
+            if (h < score && (b ^ c) < 0) {
+                h = score;
+                i_start = idx;
+            }
+        }
+    }
+
+    last_i_start = i_start;
+    return i_start;
+}
+

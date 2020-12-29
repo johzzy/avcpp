@@ -499,4 +499,5 @@ struct VideoState {
     void DrawWaves(int i_start, int nb_display_channels, int channels);
     void HackDrawWaves(int i_start, int nb_display_channels, int channels);
     void DrawRDFT(int i_start, int nb_display_channels, int channels, int rdft_bits, int nb_freq);
+    int UpdateAudioDisplay(int nb_freq, int channels);
 };
