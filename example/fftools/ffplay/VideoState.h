@@ -204,6 +204,85 @@ struct FourierContext {
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
 
+    int SampleZero(int ii, int channels) const {
+        if (ii >= SAMPLE_ARRAY_SIZE) {
+            return -1;
+        }
+        if (channels < 1) {
+            return -1;
+        }
+        for (int i = ii; i < SAMPLE_ARRAY_SIZE; i += channels) {
+            if (sample_array[i]) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    int sample_fixed_interal(int ii, int channels) const {
+        auto left = std::max(0, ii - channels);
+        // [left, ii)
+        // 1 1 0 0 1 1 0 0 1 1 0 0
+        int last_zero{ 0 };
+        int max_zero{ 0 };
+        for (int i = ii - 1; i >= left; --i) {
+            if (sample_array[i]) {
+                ++last_zero;
+            } else {
+                max_zero = std::max(max_zero, last_zero);
+                last_zero = 0;
+            }
+        }
+        return std::max(max_zero, last_zero);
+    }
+
+    int SampleFixed2(int ii, int channels) const {
+        int max_zero = sample_fixed_interal(ii, channels);
+        const int try_count {10};
+        for (int i=1; i<try_count; ++i) {
+            int iii = ii + channels * try_count;
+            max_zero = std::max(max_zero, sample_fixed_interal(iii, channels));
+        }
+        return max_zero;
+    }
+
+    int SampleFixed(int ii, int channels) const {
+        return sample_fixed_interal(ii, channels);
+    }
+
+    /* copy samples for viewing in editor window */
+    void SampleUpdate(const short* samples, int samples_size) {
+        int len;
+        int size = samples_size / sizeof(short);
+        while (size > 0) {
+            len = SAMPLE_ARRAY_SIZE - sample_array_index;
+            if (len > size)
+                len = size;
+            memcpy(sample_array + sample_array_index, samples, len * sizeof(short));
+            samples += len;
+            sample_array_index += len;
+            if (sample_array_index >= SAMPLE_ARRAY_SIZE)
+                sample_array_index = 0;
+            size -= len;
+        }
+    }
+
+    int SampleDeltaY(int h2, int i) const { return (sample_array[i] * h2) >> 15; }
+
+    int SamplePulse(int channel_index, int sample_index, int h2, int y) const {
+        static int pulse_offset{ SAMPLE_ARRAY_SIZE };
+        constexpr auto k = 3;
+        constexpr auto speed = 1;
+        constexpr auto size = 1;
+        if (sample_index == 0) {
+            // pulse_offset += speed;
+            pulse_offset += y;
+        }
+        int offset = pulse_offset - (channel_index+1) * sample_index/k;
+        h2 *= size;
+        return offset % (h2 * 2) - h2;
+    }
+
     void Close() {
         if (rdft) {
             av_rdft_end(rdft);
@@ -400,9 +479,6 @@ struct VideoState {
      */
     int AudioDecodeFrame();
 
-    /* copy samples for viewing in editor window */
-    void UpdateSampleDisplay(short* samples, int samples_size);
-
     /* return the wanted number of samples to get better sync if sync_type is
      * video or external master clock */
     int SynchronizeAudio(int nb_samples);
@@ -421,5 +497,6 @@ struct VideoState {
     VideoStateExtra& extra;
     VideoState(VideoStateExtra& e) : extra(e) {}
     void DrawWaves(int i_start, int nb_display_channels, int channels);
+    void HackDrawWaves(int i_start, int nb_display_channels, int channels);
     void DrawRDFT(int i_start, int nb_display_channels, int channels, int rdft_bits, int nb_freq);
 };

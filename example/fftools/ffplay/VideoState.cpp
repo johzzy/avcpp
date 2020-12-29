@@ -351,8 +351,7 @@ void VideoState::VideoAudioDisplay() {
     }
 
     if (show_mode == ShowMode::Waves) {
-        DrawWaves(i_start, nb_display_channels, channels);
-
+        HackDrawWaves(i_start, nb_display_channels, channels);
     } else {
         DrawRDFT(i_start, nb_display_channels, channels, rdft_bits, nb_freq);
     }
@@ -434,7 +433,6 @@ void VideoState::DrawWaves(int i_start, int nb_display_channels, int channels) {
             if (i >= SAMPLE_ARRAY_SIZE)
                 i -= SAMPLE_ARRAY_SIZE;
         }
-        // ++extra.fn_index_;
         SDL_SetRenderDrawColor(extra.renderer, 34, 87, 25, 25);
         extra.RenderFillRect(xleft, y1, width, 1);
     }
@@ -1820,21 +1818,6 @@ int VideoState::AudioDecodeFrame() {
 #endif
     return resampled_data_size;
 }
-void VideoState::UpdateSampleDisplay(short* samples, int samples_size) {
-    int len;
-    int size = samples_size / sizeof(short);
-    while (size > 0) {
-        len = SAMPLE_ARRAY_SIZE - fourier.sample_array_index;
-        if (len > size)
-            len = size;
-        memcpy(fourier.sample_array + fourier.sample_array_index, samples, len * sizeof(short));
-        samples += len;
-        fourier.sample_array_index += len;
-        if (fourier.sample_array_index >= SAMPLE_ARRAY_SIZE)
-            fourier.sample_array_index = 0;
-        size -= len;
-    }
-}
 int VideoState::SynchronizeAudio(int nb_samples) {
     int wanted_nb_samples = nb_samples;
 
@@ -1889,8 +1872,9 @@ void VideoState::sdl_audio_callback(void* opaque, Uint8* stream, int len) {
                 is->audio_buf = NULL;
                 is->audio_buf_size = SDL_AUDIO_MIN_BUFFER_SIZE / is->audio_tgt.frame_size * is->audio_tgt.frame_size;
             } else {
-                if (is->show_mode != ShowMode::Video)
-                    is->UpdateSampleDisplay((int16_t*)is->audio_buf, audio_size);
+                if (is->show_mode != ShowMode::Video) {
+                    is->fourier.SampleUpdate((int16_t*)is->audio_buf, audio_size);
+                }
                 is->audio_buf_size = audio_size;
             }
             is->audio_buf_index = 0;
@@ -2455,4 +2439,42 @@ fail:
     }
     SDL_DestroyMutex(wait_mutex);
     return 0;
+}
+
+void VideoState::HackDrawWaves(int i_start, int nb_display_channels, int channels) {
+    assert(show_mode == ShowMode::Waves);
+    SDL_SetRenderDrawColor(extra.renderer, 255, 255, 255, 255);
+
+    /* total height for one channel */
+    int h = height / nb_display_channels;
+    /* graph height / 2 */
+    int h2 = (h * 9) / 20;
+    for (int ch = 0; ch < nb_display_channels; ch++) {
+        int i = i_start + ch;
+        int y1 = ytop + ch * h + (h / 2); /* position of center line */
+        auto silent = fourier.SampleZero(i, nb_display_channels);
+        if (silent == 0) {
+            i -= fourier.SampleFixed(i, nb_display_channels);
+        }
+        for (int x = 0; x < width; x++) {
+            int y = fourier.SampleDeltaY(h2, i);
+            if (silent == 0) {
+                y = fourier.SamplePulse(ch, x, h2, y);
+            }
+            i += channels;
+            if (i >= SAMPLE_ARRAY_SIZE) {
+                i -= SAMPLE_ARRAY_SIZE;
+            }
+            extra.RenderYdX(xleft + x, y1, y);
+        }
+        SDL_SetRenderDrawColor(extra.renderer, 34, 87, 25, 25);
+        extra.RenderFillRect(xleft, y1, width, 1);
+    }
+
+    // 分割线
+    SDL_SetRenderDrawColor(extra.renderer, 34, 87, 25, 25);
+    for (int ch = 1; ch < nb_display_channels; ch++) {
+        int y = ytop + ch * h;
+        extra.RenderFillRect(xleft, y, width, 1);
+    }
 }
