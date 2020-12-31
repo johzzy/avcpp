@@ -955,7 +955,7 @@ void VideoState::SeekChapter(int incr) {
 }
 void VideoState::EventLoop() {
     SDL_Event event;
-    double incr, pos, frac;
+    double frac;
 
     for (;;) {
         double x;
@@ -1019,53 +1019,29 @@ void VideoState::EventLoop() {
                 break;
             case SDLK_PAGEUP:
                 if (ic->nb_chapters <= 1) {
-                    incr = 600.0;
-                    goto do_seek;
+                    DoSeek(600.0);
+                } else {
+                    SeekChapter(1);
                 }
-                SeekChapter(1);
                 break;
             case SDLK_PAGEDOWN:
-                if (this->ic->nb_chapters <= 1) {
-                    incr = -600.0;
-                    goto do_seek;
+                if (ic->nb_chapters <= 1) {
+                    DoSeek(-600.0);
+                } else {
+                    SeekChapter(-1);
                 }
-                SeekChapter(-1);
                 break;
             case SDLK_LEFT:
-                incr = extra.seek_interval ? -extra.seek_interval : -10.0;
-                goto do_seek;
+                DoSeek(extra.seek_interval ? -extra.seek_interval : -10.0);
+                break;
             case SDLK_RIGHT:
-                incr = extra.seek_interval ? extra.seek_interval : 10.0;
-                goto do_seek;
+                DoSeek(extra.seek_interval ? extra.seek_interval : 10.0);
+                break;
             case SDLK_UP:
-                incr = 60.0;
-                goto do_seek;
+                DoSeek(60.0);
+                break;
             case SDLK_DOWN:
-                incr = -60.0;
-            do_seek:
-                if (extra.seek_by_bytes) {
-                    pos = -1;
-                    if (pos < 0 && this->video_stream >= 0)
-                        pos = this->pictq.LastPosition();
-                    if (pos < 0 && this->audio_stream >= 0)
-                        pos = this->sampq.LastPosition();
-                    if (pos < 0)
-                        pos = avio_tell(this->ic->pb);
-                    if (this->ic->bit_rate)
-                        incr *= this->ic->bit_rate / 8.0;
-                    else
-                        incr *= 180000.0;
-                    pos += incr;
-                    StreamSeek(pos, incr, 1);
-                } else {
-                    pos = GetMasterClock();
-                    if (isnan(pos))
-                        pos = (double)this->seek_pos / AV_TIME_BASE;
-                    pos += incr;
-                    if (this->ic->start_time != AV_NOPTS_VALUE && pos < this->ic->start_time / (double)AV_TIME_BASE)
-                        pos = this->ic->start_time / (double)AV_TIME_BASE;
-                    StreamSeek((int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
-                }
+                DoSeek(-60.0);
                 break;
             default:
                 break;
@@ -1073,7 +1049,6 @@ void VideoState::EventLoop() {
             break;
         case SDL_MOUSEBUTTONDOWN:
             if (extra.exit_on_mousedown) {
-                // todo av_free(that);
                 StreamClose();
                 extra.do_exit();
                 break;
@@ -1114,7 +1089,7 @@ void VideoState::EventLoop() {
                 thh = tns / 3600;
                 tmm = (tns % 3600) / 60;
                 tss = (tns % 60);
-                frac = x / this->width;
+                frac = x / width;
                 ns = frac * tns;
                 hh = ns / 3600;
                 mm = (ns % 3600) / 60;
@@ -1123,7 +1098,7 @@ void VideoState::EventLoop() {
                        "Seek to %2.0f%% (%2d:%02d:%02d) of total duration "
                        "(%2d:%02d:%02d)       \n",
                        frac * 100, hh, mm, ss, thh, tmm, tss);
-                ts = frac * this->ic->duration;
+                ts = frac * ic->duration;
                 if (this->ic->start_time != AV_NOPTS_VALUE)
                     ts += this->ic->start_time;
                 StreamSeek(ts, 0, 0);
@@ -1144,7 +1119,6 @@ void VideoState::EventLoop() {
             break;
         case SDL_QUIT:
         case FF_QUIT_EVENT:
-            // todo av_free(that);
             StreamClose();
             extra.do_exit();
             break;
@@ -1153,6 +1127,32 @@ void VideoState::EventLoop() {
         }
     }
 }
+void VideoState::DoSeek(double incr) {
+    if (extra.seek_by_bytes) {
+        double pos = -1;
+        if (pos < 0 && video_stream >= 0)
+            pos = pictq.LastPosition();
+        if (pos < 0 && audio_stream >= 0)
+            pos = sampq.LastPosition();
+        if (pos < 0)
+            pos = avio_tell(ic->pb);
+        if (ic->bit_rate)
+            incr *= ic->bit_rate / 8.0;
+        else
+            incr *= 180000.0;
+        pos += incr;
+        StreamSeek(pos, incr, 1);
+    } else {
+        double pos = GetMasterClock();
+        if (isnan(pos))
+            pos = (double)seek_pos / AV_TIME_BASE;
+        pos += incr;
+        if (ic->start_time != AV_NOPTS_VALUE && pos < ic->start_time / (double)AV_TIME_BASE)
+            pos = ic->start_time / (double)AV_TIME_BASE;
+        StreamSeek((int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
+    }
+}
+
 int VideoState::GetMasterSyncType() {
     if (this->av_sync_type == AV_SYNC_VIDEO_MASTER) {
         if (this->video_st)
@@ -1221,17 +1221,15 @@ void VideoState::StreamTogglePause() {
 }
 void VideoState::TogglePause() {
     StreamTogglePause();
-    this->step = 0;
+    step = 0;
 }
 void VideoState::ToggleMute() {
-    this->muted = !this->muted;
+    muted = !muted;
 }
 void VideoState::UpdateVolume(int sign, double step) {
-    double volume_level =
-        this->audio_volume ? (20 * log(this->audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
+    double volume_level = audio_volume ? (20 * log(audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
     int new_volume = lrint(SDL_MIX_MAXVOLUME * pow(10.0, (volume_level + sign * step) / 20.0));
-    this->audio_volume =
-        av_clip(this->audio_volume == new_volume ? (this->audio_volume + sign) : new_volume, 0, SDL_MIX_MAXVOLUME);
+    audio_volume = av_clip(audio_volume == new_volume ? (audio_volume + sign) : new_volume, 0, SDL_MIX_MAXVOLUME);
 }
 void VideoState::StepToNextFrame() {
     /* if the stream is paused unpause it, then step */
