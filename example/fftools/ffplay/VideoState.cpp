@@ -970,7 +970,7 @@ void VideoState::EventLoop() {
             // If we don't yet have a window, skip all key events, because
             // ReadThread might still be initializing...
             if (!width)
-                continue;
+                break;
             switch (event.key.keysym.sym) {
             case SDLK_f:
                 extra.ToggleFullScreen();
