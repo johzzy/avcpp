@@ -583,6 +583,9 @@ struct VideoState {
             case SDLK_DOWN:
                 DoSeek(-60.0);
                 break;
+            case SDLK_r:
+                StreamSeek(extra.start_time != AV_NOPTS_VALUE ? extra.start_time : 0, 0, 0);
+                break;
             default:
                 break;
         }
