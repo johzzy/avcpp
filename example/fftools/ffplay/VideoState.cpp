@@ -933,12 +933,12 @@ void VideoState::SeekChapter(int incr) {
     int64_t pos = GetMasterClock() * AV_TIME_BASE;
     int i;
 
-    if (!this->ic->nb_chapters)
+    if (!ic->nb_chapters)
         return;
 
     /* find the current chapter */
-    for (i = 0; i < this->ic->nb_chapters; i++) {
-        AVChapter* ch = this->ic->chapters[i];
+    for (i = 0; i < ic->nb_chapters; i++) {
+        AVChapter* ch = ic->chapters[i];
         if (av_compare_ts(pos, AV_TIME_BASE_Q, ch->start, ch->time_base) < 0) {
             i--;
             break;
@@ -947,175 +947,28 @@ void VideoState::SeekChapter(int incr) {
 
     i += incr;
     i = FFMAX(i, 0);
-    if (i >= this->ic->nb_chapters)
+    if (i >= ic->nb_chapters)
         return;
 
     av_log(NULL, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
-    StreamSeek(av_rescale_q(this->ic->chapters[i]->start, this->ic->chapters[i]->time_base, AV_TIME_BASE_Q), 0, 0);
+    StreamSeek(av_rescale_q(ic->chapters[i]->start, ic->chapters[i]->time_base, AV_TIME_BASE_Q), 0, 0);
 }
 void VideoState::EventLoop() {
     SDL_Event event;
-    double frac;
-
     for (;;) {
-        double x;
         RefreshLoopWaitEvent(&event);
         switch (event.type) {
         case SDL_KEYDOWN:
-            if (extra.exit_on_keydown || event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
-                StreamClose();
-                extra.do_exit();
-                break;
-            }
-            // If we don't yet have a window, skip all key events, because
-            // ReadThread might still be initializing...
-            if (!width)
-                break;
-            switch (event.key.keysym.sym) {
-            case SDLK_f:
-                extra.ToggleFullScreen();
-                force_refresh = 1;
-                break;
-            case SDLK_p:
-            case SDLK_SPACE:
-                TogglePause();
-                break;
-            case SDLK_m:
-                ToggleMute();
-                break;
-            case SDLK_KP_MULTIPLY:
-            case SDLK_0:
-                UpdateVolume(1, SDL_VOLUME_STEP);
-                break;
-            case SDLK_KP_DIVIDE:
-            case SDLK_9:
-                UpdateVolume(-1, SDL_VOLUME_STEP);
-                break;
-            case SDLK_s: // S: Step to next frame
-                StepToNextFrame();
-                break;
-            case SDLK_a:
-                StreamCycleChannel(AVMEDIA_TYPE_AUDIO);
-                break;
-            case SDLK_v:
-                StreamCycleChannel(AVMEDIA_TYPE_VIDEO);
-                break;
-            case SDLK_c:
-                StreamCycleChannel(AVMEDIA_TYPE_VIDEO);
-                StreamCycleChannel(AVMEDIA_TYPE_AUDIO);
-                StreamCycleChannel(AVMEDIA_TYPE_SUBTITLE);
-                break;
-            case SDLK_t:
-                StreamCycleChannel(AVMEDIA_TYPE_SUBTITLE);
-                break;
-            case SDLK_w:
-                if (show_mode == ShowMode::Video && vfilter_idx < extra.nb_vfilters - 1) {
-                    if (++vfilter_idx >= extra.nb_vfilters)
-                        vfilter_idx = 0;
-                } else {
-                    vfilter_idx = 0;
-                    ToggleAudioDisplay();
-                }
-                break;
-            case SDLK_PAGEUP:
-                if (ic->nb_chapters <= 1) {
-                    DoSeek(600.0);
-                } else {
-                    SeekChapter(1);
-                }
-                break;
-            case SDLK_PAGEDOWN:
-                if (ic->nb_chapters <= 1) {
-                    DoSeek(-600.0);
-                } else {
-                    SeekChapter(-1);
-                }
-                break;
-            case SDLK_LEFT:
-                DoSeek(extra.seek_interval ? -extra.seek_interval : -10.0);
-                break;
-            case SDLK_RIGHT:
-                DoSeek(extra.seek_interval ? extra.seek_interval : 10.0);
-                break;
-            case SDLK_UP:
-                DoSeek(60.0);
-                break;
-            case SDLK_DOWN:
-                DoSeek(-60.0);
-                break;
-            default:
-                break;
-            }
+            DoKeyDown(event);
             break;
         case SDL_MOUSEBUTTONDOWN:
-            if (extra.exit_on_mousedown) {
-                StreamClose();
-                extra.do_exit();
-                break;
-            }
-            if (event.button.button == SDL_BUTTON_LEFT) {
-                static int64_t last_mouse_left_click = 0;
-                if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    extra.ToggleFullScreen();
-                    this->force_refresh = 1;
-                    last_mouse_left_click = 0;
-                } else {
-                    last_mouse_left_click = av_gettime_relative();
-                }
-            }
+            DoMouseButtonDown(event);
+            break;
         case SDL_MOUSEMOTION:
-            if (extra.cursor_hidden) {
-                SDL_ShowCursor(1);
-                extra.cursor_hidden = 0;
-            }
-            extra.cursor_last_shown = av_gettime_relative();
-            if (event.type == SDL_MOUSEBUTTONDOWN) {
-                if (event.button.button != SDL_BUTTON_RIGHT)
-                    break;
-                x = event.button.x;
-            } else {
-                if (!(event.motion.state & SDL_BUTTON_RMASK))
-                    break;
-                x = event.motion.x;
-            }
-            if (extra.seek_by_bytes || this->ic->duration <= 0) {
-                uint64_t size = avio_size(this->ic->pb);
-                StreamSeek(size * x / this->width, 0, 1);
-            } else {
-                int64_t ts;
-                int ns, hh, mm, ss;
-                int tns, thh, tmm, tss;
-                tns = this->ic->duration / 1000000LL;
-                thh = tns / 3600;
-                tmm = (tns % 3600) / 60;
-                tss = (tns % 60);
-                frac = x / width;
-                ns = frac * tns;
-                hh = ns / 3600;
-                mm = (ns % 3600) / 60;
-                ss = (ns % 60);
-                av_log(NULL, AV_LOG_INFO,
-                       "Seek to %2.0f%% (%2d:%02d:%02d) of total duration "
-                       "(%2d:%02d:%02d)       \n",
-                       frac * 100, hh, mm, ss, thh, tmm, tss);
-                ts = frac * ic->duration;
-                if (this->ic->start_time != AV_NOPTS_VALUE)
-                    ts += this->ic->start_time;
-                StreamSeek(ts, 0, 0);
-            }
+            DoMouseMotton(event);
             break;
         case SDL_WINDOWEVENT:
-            switch (event.window.event) {
-            case SDL_WINDOWEVENT_SIZE_CHANGED:
-                extra.screen_width = width = event.window.data1;
-                extra.screen_height = height = event.window.data2;
-                if (vis_texture) {
-                    SDL_DestroyTexture(vis_texture);
-                    vis_texture = nullptr;
-                }
-            case SDL_WINDOWEVENT_EXPOSED:
-                force_refresh = 1;
-            }
+            DoWindowEvent(event);
             break;
         case SDL_QUIT:
         case FF_QUIT_EVENT:
@@ -1198,14 +1051,14 @@ void VideoState::CheckExternalClockSpeed() {
     }
 }
 void VideoState::StreamSeek(int64_t pos, int64_t rel, int seek_by_bytes) {
-    if (!this->seek_req) {
-        this->seek_pos = pos;
-        this->seek_rel = rel;
-        this->seek_flags &= ~AVSEEK_FLAG_BYTE;
+    if (!seek_req) {
+        seek_pos = pos;
+        seek_rel = rel;
+        seek_flags &= ~AVSEEK_FLAG_BYTE;
         if (seek_by_bytes)
-            this->seek_flags |= AVSEEK_FLAG_BYTE;
-        this->seek_req = 1;
-        SDL_CondSignal(this->continue_read_thread);
+            seek_flags |= AVSEEK_FLAG_BYTE;
+        seek_req = 1;
+        SDL_CondSignal(continue_read_thread);
     }
 }
 void VideoState::StreamTogglePause() {
