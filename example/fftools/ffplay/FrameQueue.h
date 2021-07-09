@@ -54,13 +54,11 @@ struct PacketQueue {
     SDL_mutex *mutex;
     SDL_cond *cond;
 
-    const AVPacket* flush_pkt_{ nullptr};
-
     void Flush();
 
     void Destroy();
 
-    void Start(AVPacket& flush_pkt);
+    void Start();
 
     int PutPrivate(AVPacket *pkt);
 

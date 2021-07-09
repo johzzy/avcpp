@@ -39,10 +39,7 @@ struct Decoder {
               PacketQueue *queue,
               SDL_cond *empty_queue_cond);
 
-    int Start(AVPacket &flush_pkt,
-              int (*fn)(void *),
-              const char *thread_name,
-              void *arg);
+    int Start(int (*fn)(void*), const char* thread_name, void* arg);
 
     int DecodeFrame(AVFrame *frame, AVSubtitle *sub);
 

@@ -773,7 +773,7 @@ int VideoState::StreamComponentOpen(int stream_index) {
             this->auddec.start_pts = this->audio_st->start_time;
             this->auddec.start_pts_tb = this->audio_st->time_base;
         }
-        if ((ret = this->auddec.Start(extra.flush_pkt, audio_thread, "audio_decoder", this)) < 0)
+        if ((ret = this->auddec.Start(audio_thread, "audio_decoder", this)) < 0)
             goto out;
         SDL_PauseAudioDevice(audio_device_id, 0);
         break;
@@ -782,7 +782,7 @@ int VideoState::StreamComponentOpen(int stream_index) {
         this->video_st = ic->streams[stream_index];
 
         this->viddec.Init(avctx, &videoq, continue_read_thread);
-        if ((ret = this->viddec.Start(extra.flush_pkt, video_thread, "video_decoder", this)) < 0)
+        if ((ret = this->viddec.Start(video_thread, "video_decoder", this)) < 0)
             goto out;
         this->queue_attachments_req = 1;
         break;
@@ -791,7 +791,7 @@ int VideoState::StreamComponentOpen(int stream_index) {
         this->subtitle_st = ic->streams[stream_index];
 
         this->subdec.Init(avctx, &subtitleq, continue_read_thread);
-        if ((ret = this->subdec.Start(extra.flush_pkt, subtitle_thread, "subtitle_decoder", this)) < 0)
+        if ((ret = this->subdec.Start(subtitle_thread, "subtitle_decoder", this)) < 0)
             goto out;
         break;
     default:
@@ -2144,15 +2144,12 @@ int VideoState::ReadThread(void* arg) {
             } else {
                 if (is->audio_stream >= 0) {
                     is->audioq.Flush();
-                    is->audioq.Put(&is->extra.flush_pkt);
                 }
                 if (is->subtitle_stream >= 0) {
                     is->subtitleq.Flush();
-                    is->subtitleq.Put(&is->extra.flush_pkt);
                 }
                 if (is->video_stream >= 0) {
                     is->videoq.Flush();
-                    is->videoq.Put(&is->extra.flush_pkt);
                 }
                 if (is->seek_flags & AVSEEK_FLAG_BYTE) {
                     is->extclk.set_clock(NAN, 0);

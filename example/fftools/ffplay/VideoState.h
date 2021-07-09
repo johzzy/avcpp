@@ -96,12 +96,6 @@ struct SDL_Texture;
 enum class ShowMode : int { None = -1, Video = 0, Waves, RDFT, NB };
 
 struct VideoStateExtra {
-    AVPacket flush_pkt;
-
-    VideoStateExtra() {
-        av_init_packet(&flush_pkt);
-        flush_pkt.data = (uint8_t*)&flush_pkt;
-    }
     /* options specified by the user */
     AVInputFormat* file_iformat{ nullptr };
     int av_sync_type = AV_SYNC_AUDIO_MASTER;

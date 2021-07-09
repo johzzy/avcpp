@@ -15,13 +15,9 @@ void Decoder::Init(AVCodecContext *avctx,
     start_pts = AV_NOPTS_VALUE;
     pkt_serial = -1;
 }
-int Decoder::Start(AVPacket &flush_pkt,
-                   int (*fn)(void *),
-                   const char *thread_name,
-                   void *arg)
-{
+int Decoder::Start(int (*fn)(void*), const char* thread_name, void* arg) {
     assert(queue);
-    queue->Start(flush_pkt);
+    queue->Start();
     decoder_tid = SDL_CreateThread(fn, thread_name, arg);
     if (!decoder_tid) {
         av_log(NULL, AV_LOG_ERROR, "SDL_CreateThread(): %s\n", SDL_GetError());
@@ -88,20 +84,22 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
                 av_packet_move_ref(&pkt, &pkt);
                 packet_pending = 0;
             } else {
+                int old_serial = pkt_serial;
                 if (queue->Get(&pkt, 1, &pkt_serial) < 0)
                     return -1;
+                if (old_serial != pkt_serial) {
+                    avcodec_flush_buffers(avctx);
+                    finished = 0;
+                    next_pts = start_pts;
+                    next_pts_tb = start_pts_tb;
+                }
             }
             if (queue->serial == pkt_serial)
                 break;
             av_packet_unref(&pkt);
         } while (1);
-        assert(queue->flush_pkt_);
-        if (pkt.data == queue->flush_pkt_->data) {
-            avcodec_flush_buffers(avctx);
-            finished = 0;
-            next_pts = start_pts;
-            next_pts_tb = start_pts_tb;
-        } else {
+
+        {
             if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE) {
                 int got_frame = 0;
                 ret = avcodec_decode_subtitle2(avctx, sub, &got_frame, &pkt);

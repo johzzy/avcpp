@@ -18,6 +18,7 @@ void PacketQueue::Flush()
     nb_packets = 0;
     size = 0;
     duration = 0;
+    ++serial;
     SDL_UnlockMutex(mutex);
 }
 void PacketQueue::Destroy()
@@ -26,12 +27,11 @@ void PacketQueue::Destroy()
     SDL_DestroyMutex(mutex);
     SDL_DestroyCond(cond);
 }
-void PacketQueue::Start(AVPacket &flush_pkt)
+void PacketQueue::Start()
 {
     SDL_LockMutex(mutex);
-    flush_pkt_ = &flush_pkt;
     abort_request = 0;
-    PutPrivate(&flush_pkt);
+    ++serial;
     SDL_UnlockMutex(mutex);
 }
 int PacketQueue::PutPrivate(AVPacket *pkt)
@@ -46,8 +46,6 @@ int PacketQueue::PutPrivate(AVPacket *pkt)
         return -1;
     pkt1->pkt = *pkt;
     pkt1->next = NULL;
-    if (pkt == flush_pkt_)
-        serial++;
     pkt1->serial = serial;
 
     if (!last_pkt)
@@ -70,7 +68,7 @@ int PacketQueue::Put(AVPacket *pkt)
     ret = PutPrivate(pkt);
     SDL_UnlockMutex(mutex);
 
-    if (pkt != flush_pkt_ && ret < 0)
+    if (ret < 0)
         av_packet_unref(pkt);
 
     return ret;
