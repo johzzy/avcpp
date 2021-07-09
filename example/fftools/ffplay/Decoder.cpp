@@ -30,8 +30,6 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
     int ret = AVERROR(EAGAIN);
 
     for (;;) {
-        AVPacket pkt;
-
         if (queue->serial == pkt_serial) {
             do {
                 if (queue->abort_request)
@@ -81,7 +79,6 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
             if (queue->nb_packets == 0)
                 SDL_CondSignal(empty_queue_cond);
             if (packet_pending) {
-                av_packet_move_ref(&pkt, &pkt);
                 packet_pending = 0;
             } else {
                 int old_serial = pkt_serial;
@@ -108,22 +105,22 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
                 } else {
                     if (got_frame && !pkt.data) {
                         packet_pending = 1;
-                        av_packet_move_ref(&pkt, &pkt);
                     }
                     ret = got_frame
                               ? 0
                               : (pkt.data ? AVERROR(EAGAIN) : AVERROR_EOF);
                 }
+                av_packet_unref(&pkt);
             } else {
                 if (avcodec_send_packet(avctx, &pkt) == AVERROR(EAGAIN)) {
                     av_log(avctx, AV_LOG_ERROR,
                            "Receive_frame and send_packet both returned "
                            "EAGAIN, which is an API violation.\n");
                     packet_pending = 1;
-                    av_packet_move_ref(&pkt, &pkt);
+                } else {
+                    av_packet_unref(&pkt);
                 }
             }
-            av_packet_unref(&pkt);
         }
     }
 }
