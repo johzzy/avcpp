@@ -767,7 +767,8 @@ int VideoState::StreamComponentOpen(int stream_index) {
         this->audio_stream = stream_index;
         this->audio_st = ic->streams[stream_index];
 
-        this->auddec.Init(avctx, &audioq, continue_read_thread);
+        if ((ret = auddec.Init(avctx, &audioq, continue_read_thread)) < 0)
+            goto fail;
         if ((this->ic->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK)) &&
             !this->ic->iformat->read_seek) {
             this->auddec.start_pts = this->audio_st->start_time;
@@ -781,7 +782,8 @@ int VideoState::StreamComponentOpen(int stream_index) {
         this->video_stream = stream_index;
         this->video_st = ic->streams[stream_index];
 
-        this->viddec.Init(avctx, &videoq, continue_read_thread);
+        if ((ret = viddec.Init(avctx, &videoq, continue_read_thread)) < 0)
+            goto fail;
         if ((ret = this->viddec.Start(video_thread, "video_decoder", this)) < 0)
             goto out;
         this->queue_attachments_req = 1;
@@ -790,7 +792,8 @@ int VideoState::StreamComponentOpen(int stream_index) {
         this->subtitle_stream = stream_index;
         this->subtitle_st = ic->streams[stream_index];
 
-        this->subdec.Init(avctx, &subtitleq, continue_read_thread);
+        if ((ret = subdec.Init(avctx, &subtitleq, continue_read_thread)) < 0)
+            goto fail;
         if ((ret = this->subdec.Start(subtitle_thread, "subtitle_decoder", this)) < 0)
             goto out;
         break;
@@ -1950,7 +1953,7 @@ int VideoState::ReadThread(void* arg) {
     AVFormatContext* ic = NULL;
     int err, i, ret;
     int st_index[AVMEDIA_TYPE_NB];
-    AVPacket pkt1, *pkt = &pkt1;
+    AVPacket *pkt = nullptr;
     int64_t stream_start_time;
     int pkt_in_play_range = 0;
     AVDictionaryEntry* t;
@@ -1967,6 +1970,12 @@ int VideoState::ReadThread(void* arg) {
     memset(st_index, -1, sizeof(st_index));
     is->eof = 0;
 
+    pkt = av_packet_alloc();
+    if (!pkt) {
+        av_log(NULL, AV_LOG_FATAL, "Could not allocate packet.\n");
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
     ic = avformat_alloc_context();
     if (!ic) {
         av_log(NULL, AV_LOG_FATAL, "Could not allocate context.\n");
@@ -2165,11 +2174,10 @@ int VideoState::ReadThread(void* arg) {
         }
         if (is->queue_attachments_req) {
             if (is->video_st && is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC) {
-                AVPacket copy;
-                if ((ret = av_packet_ref(&copy, &is->video_st->attached_pic)) < 0)
+                if ((ret = av_packet_ref(pkt, &is->video_st->attached_pic)) < 0)
                     goto fail;
-                is->videoq.Put(&copy);
-                is->videoq.PutNullPacket(is->video_stream);
+                is->videoq.Put(pkt);
+                is->videoq.PutNullPacket(pkt, is->video_stream);
             }
             is->queue_attachments_req = 0;
         }
@@ -2200,11 +2208,11 @@ int VideoState::ReadThread(void* arg) {
         if (ret < 0) {
             if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
                 if (is->video_stream >= 0)
-                    is->videoq.PutNullPacket(is->video_stream);
+                    is->videoq.PutNullPacket(pkt, is->video_stream);
                 if (is->audio_stream >= 0)
-                    is->audioq.PutNullPacket(is->audio_stream);
+                    is->audioq.PutNullPacket(pkt, is->audio_stream);
                 if (is->subtitle_stream >= 0)
-                    is->subtitleq.PutNullPacket(is->subtitle_stream);
+                    is->subtitleq.PutNullPacket(pkt, is->subtitle_stream);
                 is->eof = 1;
             }
             if (ic->pb && ic->pb->error) {
@@ -2247,6 +2255,7 @@ fail:
     if (ic && !is->ic)
         avformat_close_input(&ic);
 
+    av_packet_free(&pkt);
     if (ret != 0) {
         SDL_Event event;
 

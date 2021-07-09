@@ -6,6 +6,7 @@
 
 extern "C" {
 #include <libavformat/avformat.h>
+#include "libavutil/fifo.h"
 }
 
 #include <SDL2/SDL_mutex.h>
@@ -39,13 +40,12 @@ constexpr int SAMPLE_QUEUE_SIZE = 9;
 constexpr int FRAME_QUEUE_SIZE = FFMAX(SAMPLE_QUEUE_SIZE, FFMAX(VIDEO_PICTURE_QUEUE_SIZE, SUBPICTURE_QUEUE_SIZE));
 
 typedef struct MyAVPacketList {
-    AVPacket pkt;
-    struct MyAVPacketList *next;
+    AVPacket *pkt;
     int serial;
 } MyAVPacketList;
 
 struct PacketQueue {
-    MyAVPacketList *first_pkt, *last_pkt;
+    AVFifoBuffer *pkt_list;
     int nb_packets;
     int size;
     int64_t duration;
@@ -64,7 +64,7 @@ struct PacketQueue {
 
     int Put(AVPacket *pkt);
 
-    int PutNullPacket(int stream_index);
+    int PutNullPacket(AVPacket *pkt, int stream_index);
 
     /* packet queue handling */
     int Init();

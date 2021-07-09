@@ -5,15 +5,19 @@
 #include "Decoder.h"
 #include "FrameQueue.h"
 
-void Decoder::Init(AVCodecContext *avctx,
+int Decoder::Init(AVCodecContext *avctx,
                    PacketQueue *queue,
                    SDL_cond *empty_queue_cond)
 {
+    pkt = av_packet_alloc();
+    if (!pkt)
+        return AVERROR(ENOMEM);
     this->avctx = avctx;
     this->queue = queue;
     this->empty_queue_cond = empty_queue_cond;
     start_pts = AV_NOPTS_VALUE;
     pkt_serial = -1;
+    return 0;
 }
 int Decoder::Start(int (*fn)(void*), const char* thread_name, void* arg) {
     assert(queue);
@@ -82,7 +86,7 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
                 packet_pending = 0;
             } else {
                 int old_serial = pkt_serial;
-                if (queue->Get(&pkt, 1, &pkt_serial) < 0)
+                if (queue->Get(pkt, 1, &pkt_serial) < 0)
                     return -1;
                 if (old_serial != pkt_serial) {
                     avcodec_flush_buffers(avctx);
@@ -93,32 +97,32 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
             }
             if (queue->serial == pkt_serial)
                 break;
-            av_packet_unref(&pkt);
+            av_packet_unref(pkt);
         } while (1);
 
         {
             if (avctx->codec_type == AVMEDIA_TYPE_SUBTITLE) {
                 int got_frame = 0;
-                ret = avcodec_decode_subtitle2(avctx, sub, &got_frame, &pkt);
+                ret = avcodec_decode_subtitle2(avctx, sub, &got_frame, pkt);
                 if (ret < 0) {
                     ret = AVERROR(EAGAIN);
                 } else {
-                    if (got_frame && !pkt.data) {
+                    if (got_frame && !pkt->data) {
                         packet_pending = 1;
                     }
                     ret = got_frame
                               ? 0
-                              : (pkt.data ? AVERROR(EAGAIN) : AVERROR_EOF);
+                              : (pkt->data ? AVERROR(EAGAIN) : AVERROR_EOF);
                 }
-                av_packet_unref(&pkt);
+                av_packet_unref(pkt);
             } else {
-                if (avcodec_send_packet(avctx, &pkt) == AVERROR(EAGAIN)) {
+                if (avcodec_send_packet(avctx, pkt) == AVERROR(EAGAIN)) {
                     av_log(avctx, AV_LOG_ERROR,
                            "Receive_frame and send_packet both returned "
                            "EAGAIN, which is an API violation.\n");
                     packet_pending = 1;
                 } else {
-                    av_packet_unref(&pkt);
+                    av_packet_unref(pkt);
                 }
             }
         }
@@ -126,7 +130,7 @@ int Decoder::DecodeFrame(AVFrame *frame, AVSubtitle *sub)
 }
 void Decoder::Destroy()
 {
-    av_packet_unref(&pkt);
+    av_packet_free(&pkt);
     avcodec_free_context(&avctx);
 }
 void Decoder::Abort(FrameQueue *fq)

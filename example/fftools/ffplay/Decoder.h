@@ -20,7 +20,7 @@ struct PacketQueue;
 struct FrameQueue;
 
 struct Decoder {
-    AVPacket pkt;
+    AVPacket *pkt;
     PacketQueue *queue;
     AVCodecContext *avctx;
     int pkt_serial;
@@ -35,7 +35,7 @@ struct Decoder {
 
     static int decoder_reorder_pts;
 
-    void Init(AVCodecContext *avctx,
+    int Init(AVCodecContext *avctx,
               PacketQueue *queue,
               SDL_cond *empty_queue_cond);
 

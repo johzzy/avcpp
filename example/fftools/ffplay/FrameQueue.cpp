@@ -6,15 +6,13 @@
 
 void PacketQueue::Flush()
 {
+    MyAVPacketList pkt1;
+
     SDL_LockMutex(mutex);
-    MyAVPacketList *pkt1;
-    for (auto pkt = first_pkt; pkt; pkt = pkt1) {
-        pkt1 = pkt->next;
-        av_packet_unref(&pkt->pkt);
-        av_freep(&pkt);
+    while (av_fifo_size(pkt_list) >= sizeof(pkt1)) {
+        av_fifo_generic_read(pkt_list, &pkt1, sizeof(pkt1), NULL);
+        av_packet_free(&pkt1.pkt);
     }
-    last_pkt = NULL;
-    first_pkt = NULL;
     nb_packets = 0;
     size = 0;
     duration = 0;
@@ -24,6 +22,7 @@ void PacketQueue::Flush()
 void PacketQueue::Destroy()
 {
     Flush();
+    av_fifo_freep(&pkt_list);
     SDL_DestroyMutex(mutex);
     SDL_DestroyCond(cond);
 }
@@ -36,26 +35,22 @@ void PacketQueue::Start()
 }
 int PacketQueue::PutPrivate(AVPacket *pkt)
 {
-    MyAVPacketList *pkt1;
+    MyAVPacketList pkt1;
 
     if (abort_request)
         return -1;
+    if (av_fifo_space(pkt_list) < sizeof(pkt1)) {
+        if (av_fifo_grow(pkt_list, sizeof(pkt1)) < 0)
+            return -1;
+    }
 
-    pkt1 = (MyAVPacketList *)av_malloc(sizeof(MyAVPacketList));
-    if (!pkt1)
-        return -1;
-    pkt1->pkt = *pkt;
-    pkt1->next = NULL;
-    pkt1->serial = serial;
+    pkt1.pkt = pkt;
+    pkt1.serial = serial;
 
-    if (!last_pkt)
-        first_pkt = pkt1;
-    else
-        last_pkt->next = pkt1;
-    last_pkt = pkt1;
+    av_fifo_generic_write(pkt_list, &pkt1, sizeof(pkt1), nullptr);
     nb_packets++;
-    size += pkt1->pkt.size + sizeof(*pkt1);
-    duration += pkt1->pkt.duration;
+    size += pkt1.pkt->size + sizeof(pkt1);
+    duration += pkt1.pkt->duration;
     /* XXX: should duplicate packet data in DV case */
     SDL_CondSignal(cond);
     return 0;
@@ -64,27 +59,33 @@ int PacketQueue::Put(AVPacket *pkt)
 {
     int ret;
 
+    AVPacket *pkt1 = av_packet_alloc();
+    if (!pkt1) {
+        av_packet_unref(pkt);
+        return -1;
+    }
+    av_packet_move_ref(pkt1, pkt);
+
     SDL_LockMutex(mutex);
-    ret = PutPrivate(pkt);
+    ret = PutPrivate(pkt1);
     SDL_UnlockMutex(mutex);
 
     if (ret < 0)
-        av_packet_unref(pkt);
+        av_packet_free(&pkt1);
 
     return ret;
 }
-int PacketQueue::PutNullPacket(int stream_index)
+int PacketQueue::PutNullPacket(AVPacket *pkt, int stream_index)
 {
-    AVPacket pkt1, *pkt = &pkt1;
-    av_init_packet(pkt);
-    pkt->data = NULL;
-    pkt->size = 0;
     pkt->stream_index = stream_index;
     return Put(pkt);
 }
 int PacketQueue::Init()
 {
     memset(this, 0, sizeof(PacketQueue));
+    pkt_list = av_fifo_alloc(sizeof(MyAVPacketList));
+    if (!pkt_list)
+        return AVERROR(ENOMEM);
     mutex = SDL_CreateMutex();
     if (!mutex) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
@@ -110,7 +111,7 @@ void PacketQueue::Abort()
 }
 int PacketQueue::Get(AVPacket *pkt, int block, int *serial)
 {
-    MyAVPacketList *pkt1;
+    MyAVPacketList pkt1;
     int ret;
 
     SDL_LockMutex(mutex);
@@ -121,18 +122,15 @@ int PacketQueue::Get(AVPacket *pkt, int block, int *serial)
             break;
         }
 
-        pkt1 = first_pkt;
-        if (pkt1) {
-            first_pkt = pkt1->next;
-            if (!first_pkt)
-                last_pkt = NULL;
+        if (av_fifo_size(pkt_list) >= sizeof(pkt1)) {
+            av_fifo_generic_read(pkt_list, &pkt1, sizeof(pkt1), NULL);
             nb_packets--;
-            size -= pkt1->pkt.size + sizeof(*pkt1);
-            duration -= pkt1->pkt.duration;
-            *pkt = pkt1->pkt;
+            size -= pkt1.pkt->size + sizeof(pkt1);
+            duration -= pkt1.pkt->duration;
+            av_packet_move_ref(pkt, pkt1.pkt);
             if (serial)
-                *serial = pkt1->serial;
-            av_free(pkt1);
+                *serial = pkt1.serial;
+            av_packet_free(&pkt1.pkt);
             ret = 1;
             break;
         } else if (!block) {
